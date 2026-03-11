@@ -1,0 +1,45 @@
+"""
+OURE Risk Calculation - Orchestrator
+====================================
+"""
+
+from __future__ import annotations
+
+import numpy as np
+
+from oure.core.models import ConjunctionEvent, RiskResult
+
+from .bplane import BPlaneProjector
+from .foster import FosterPcCalculator
+
+
+class RiskCalculator:
+    """
+    Computes the Probability of Collision for a ConjunctionEvent.
+    """
+
+    def __init__(self, hard_body_radius_m: float = 20.0):
+        self.hard_body_radius_km = hard_body_radius_m / 1000.0
+        self.bplane_projector = BPlaneProjector()
+        self.pc_calculator = FosterPcCalculator(self.hard_body_radius_km)
+
+    def compute_pc(self, event: ConjunctionEvent) -> RiskResult:
+        """
+        Full Pc pipeline for one conjunction event.
+        """
+        projection = self.bplane_projector.project(event)
+
+        pc = self.pc_calculator.compute(projection.b_vec_2d, projection.C_2d)
+
+        sigma_x = np.sqrt(projection.C_2d[0, 0])
+        sigma_z = np.sqrt(projection.C_2d[1, 1])
+
+        return RiskResult(
+            conjunction=event,
+            pc=pc,
+            combined_covariance=projection.C_2d,
+            hard_body_radius_m=self.hard_body_radius_km * 1000,
+            b_plane_sigma_x=sigma_x,
+            b_plane_sigma_z=sigma_z,
+            method=self.pc_calculator.method.value
+        )

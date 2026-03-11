@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "oure-risk-engine"
+version = "1.0.0"
+description = "Orbital Uncertainty & Risk Engine --- Satellite Collision Probability Solver"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1",
+    "numpy>=1.26",
+    "scipy>=1.12",
+    "sgp4>=2.22",
+    "requests>=2.31",
+    "pydantic>=2.5",
+    "rich>=13.7",
+    "structlog>=24.1",
+    "tenacity>=8.2",
+    "httpx>=0.27",
+    "fpdf2>=2.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov", "pytest-asyncio", "hypothesis", "ruff", "mypy", "pre-commit", "faker"]
+vis = ["matplotlib>=3.8", "plotly>=5.18"]
+
+[project.scripts]
+oure = "oure.cli.main:cli"
+
+[tool.ruff.lint]
+select = ["E","F","W","I","N","UP","ANN","B","C4","SIM","TCH"]
+ignore = ["ANN101","ANN102"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=oure --cov-report=term-missing --cov-fail-under=80"
+filterwarnings = [
+    "ignore:unclosed database",
+]
+
+[tool.coverage.run]
+omit = ["*/oure/cli/*", "*/tests/*"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["oure"]
