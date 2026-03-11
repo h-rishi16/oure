@@ -78,6 +78,9 @@ from . import cmd_monitor
 from . import cmd_cache
 from . import cmd_report
 from . import cmd_plot
+from . import cmd_avoid
+from . import cmd_fleet
+from . import cmd_cdm
 
 if __name__ == "__main__":
     cli(auto_envvar_prefix="OURE")
