@@ -41,7 +41,7 @@ def monitor(ctx: click.Context, primary: str, secondaries_file: str, alert_thres
             timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
             console.print(f"[cyan][{timestamp}] Run #{run_count}  — invoking ctx.invoke(analyze)...[/cyan]")
 
-            ctx.invoke(
+            results = ctx.invoke(
                 analyze,
                 primary=primary,
                 secondary=[],
@@ -52,6 +52,18 @@ def monitor(ctx: click.Context, primary: str, secondaries_file: str, alert_thres
                 hard_body_radius=20.0,
                 output=None
             )
+
+            if results:
+                for r in results:
+                    ctx.obj.cache.log_risk_event(
+                        primary_id=r.conjunction.primary_id,
+                        secondary_id=r.conjunction.secondary_id,
+                        tca=r.conjunction.tca,
+                        pc=r.pc,
+                        miss_distance_km=r.conjunction.miss_distance_km,
+                        warning_level=r.warning_level
+                    )
+                console.print(f"[dim]Logged {len(results)} events to risk history database.[/dim]")
 
             if max_runs and run_count >= max_runs:
                 console.print("\n[bold green]Max runs reached. Exiting monitor.[/bold green]")

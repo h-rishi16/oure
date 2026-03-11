@@ -6,15 +6,15 @@ OURE Risk Calculation - Interactive B-Plane Plotter
 import numpy as np
 import plotly.graph_objects as go
 from pathlib import Path
+from oure.core.models import ConjunctionEvent
 
 class RiskPlotter:
     """Generates interactive HTML plots for conjunction events."""
 
     @staticmethod
-    def plot_bplane_from_json(event_data: dict, output_path: Path):
+    def create_bplane_figure(event_data: dict) -> go.Figure:
         """
-        Generates a 2D B-Plane cross-section plot showing the primary satellite
-        (with hard-body radius) and the secondary satellite's uncertainty ellipses.
+        Creates a 2D B-Plane cross-section Plotly figure.
         """
         sigma_x, sigma_z = event_data.get("sigma_bplane_km", [1.0, 1.0])
         miss_dist = event_data.get("miss_distance_km", 0.0)
@@ -69,5 +69,76 @@ class RiskPlotter:
             yaxis_showgrid=True, yaxis_gridcolor='lightgrey',
             legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
         )
-        
+        return fig
+
+    @staticmethod
+    def plot_bplane_from_json(event_data: dict, output_path: Path):
+        fig = RiskPlotter.create_bplane_figure(event_data)
         fig.write_html(str(output_path))
+
+    @staticmethod
+    def create_3d_encounter_figure(event: ConjunctionEvent) -> go.Figure:
+        """
+        Creates a 3D representation of the encounter around TCA using the exact ECI states.
+        Simulates small linear trajectories around TCA for visualization.
+        """
+        r_p = event.primary_state.r
+        v_p = event.primary_state.v
+        r_s = event.secondary_state.r
+        v_s = event.secondary_state.v
+        
+        # Create a time array from -30 seconds to +30 seconds around TCA
+        t_offsets = np.linspace(-30, 30, 60)
+        
+        # Linearly project positions (sufficiently accurate for a 60-second window in LEO)
+        traj_p = r_p + np.outer(t_offsets, v_p)
+        traj_s = r_s + np.outer(t_offsets, v_s)
+        
+        fig = go.Figure()
+        
+        # Primary Trajectory
+        fig.add_trace(go.Scatter3d(
+            x=traj_p[:, 0], y=traj_p[:, 1], z=traj_p[:, 2],
+            mode='lines', line=dict(color='blue', width=4),
+            name=f'{event.primary_id} Trajectory'
+        ))
+        # Primary Position at TCA
+        fig.add_trace(go.Scatter3d(
+            x=[r_p[0]], y=[r_p[1]], z=[r_p[2]],
+            mode='markers', marker=dict(size=8, color='darkblue'),
+            name=f'{event.primary_id} at TCA'
+        ))
+        
+        # Secondary Trajectory
+        fig.add_trace(go.Scatter3d(
+            x=traj_s[:, 0], y=traj_s[:, 1], z=traj_s[:, 2],
+            mode='lines', line=dict(color='red', width=4),
+            name=f'{event.secondary_id} Trajectory'
+        ))
+        # Secondary Position at TCA
+        fig.add_trace(go.Scatter3d(
+            x=[r_s[0]], y=[r_s[1]], z=[r_s[2]],
+            mode='markers', marker=dict(size=8, color='darkred'),
+            name=f'{event.secondary_id} at TCA'
+        ))
+        
+        # Draw a line representing the miss distance vector
+        fig.add_trace(go.Scatter3d(
+            x=[r_p[0], r_s[0]], y=[r_p[1], r_s[1]], z=[r_p[2], r_s[2]],
+            mode='lines', line=dict(color='black', width=2, dash='dash'),
+            name=f'Miss Distance: {event.miss_distance_km:.3f} km'
+        ))
+
+        fig.update_layout(
+            title="3D ECI Encounter Geometry (±30s around TCA)",
+            scene=dict(
+                xaxis_title='X (km)',
+                yaxis_title='Y (km)',
+                zaxis_title='Z (km)',
+                aspectmode='data'
+            ),
+            margin=dict(l=0, r=0, b=0, t=30),
+            legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
+        )
+        
+        return fig

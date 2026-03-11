@@ -124,7 +124,7 @@ def _save_results_to_json(results: list[RiskResult], path: Path) -> None:
 def analyze(
     ctx: click.Context, primary: str, secondary: tuple[str, ...], secondaries_file: str | None, look_ahead: float,
     screening_dist: float, mc_samples: int, hard_body_radius: float, output: str | None
-) -> None:
+) -> list[RiskResult] | None:
     """
     Run full conjunction assessment and Pc calculation pipeline.
     """
@@ -188,7 +188,7 @@ def analyze(
 
     if not events:
         console.print("\n[bold green]✓ No conjunctions found in look-ahead window.[/bold green]")
-        return
+        return []
 
     console.print(f"\n[bold yellow]⚠  Found {len(events)} conjunction event(s):[/bold yellow]\n")
 
@@ -207,3 +207,5 @@ def analyze(
 
     max_pc = max(r.pc for r in results)
     _print_summary_banner(max_pc, len(results))
+
+    return results

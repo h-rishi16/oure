@@ -81,6 +81,7 @@ from . import cmd_plot
 from . import cmd_avoid
 from . import cmd_fleet
 from . import cmd_cdm
+from . import cmd_history
 
 if __name__ == "__main__":
     cli(auto_envvar_prefix="OURE")

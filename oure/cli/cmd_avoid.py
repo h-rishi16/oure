@@ -19,6 +19,7 @@ from oure.physics.numerical import NumericalPropagator
 from oure.physics.maneuver import Maneuver, ManeuverPropagator
 from oure.conjunction.tca_finder import TCARefinementEngine
 from oure.risk.calculator import RiskCalculator
+from oure.risk.optimizer import ManeuverOptimizer
 from .cmd_analyze import _tle_to_initial_state, _default_covariance
 from .main import cli, OUREContext
 
@@ -28,8 +29,9 @@ console = Console()
 @click.option("--primary", "-p", required=True, help="NORAD ID of the primary satellite.")
 @click.option("--secondary", "-s", required=True, help="NORAD ID of the secondary satellite.")
 @click.option("--burn-time-before-tca", default=12.0, help="Hours before TCA to execute burn.")
+@click.option("--optimize", is_flag=True, default=False, help="Run the SLSQP optimizer to find the exact minimum-fuel burn.")
 @click.pass_context
-def avoid(ctx, primary, secondary, burn_time_before_tca):
+def avoid(ctx, primary, secondary, burn_time_before_tca, optimize):
     """
     Simulate collision avoidance maneuvers to find the cheapest safe delta-V.
     """
@@ -90,65 +92,96 @@ def avoid(ctx, primary, secondary, burn_time_before_tca):
     console.print(f"Baseline Miss: [bold]{nominal_miss:.3f} km[/bold]")
     console.print(f"Baseline Pc: [bold red]{nominal_risk.pc:.2e}[/bold red]\n")
     
-    # 2. Setup Trade Space
     burn_epoch = nominal_tca - timedelta(hours=burn_time_before_tca)
-    console.print(f"Simulating maneuvers at T-{burn_time_before_tca}h ({burn_epoch.strftime('%H:%M:%S')})")
     
-    # We will simulate prograde and retrograde burns (along the velocity vector)
-    # Get velocity vector at burn epoch to figure out along-track direction
-    burn_state = base_prop.propagate_to(p_state, burn_epoch)
-    v_hat = burn_state.v / np.linalg.norm(burn_state.v)
-    
-    test_dvs_cm_s = [-5.0, -1.0, -0.5, -0.1, 0.1, 0.5, 1.0, 5.0]  # cm/s
-    
-    table = Table(title="Collision Avoidance Trade Space")
-    table.add_column("Maneuver (cm/s)", justify="right", style="cyan")
-    table.add_column("Direction", style="blue")
-    table.add_column("New Miss (km)", justify="right")
-    table.add_column("New Pc", justify="right", style="bold")
-    table.add_column("Status", justify="center")
-
-    for dv_cm in test_dvs_cm_s:
-        dv_km_s = (dv_cm / 100.0) / 1000.0
-        delta_v_vec = v_hat * dv_km_s
-        
-        maneuver = Maneuver(burn_epoch=burn_epoch, delta_v_eci=delta_v_vec)
-        man_prop = ManeuverPropagator(base_propagator=base_prop, maneuvers=[maneuver])
-        
-        # Find new TCA with maneuver
-        new_tca_result = tca_finder.find_tca(
-            p_state, man_prop, s_state, base_prop, 
-            burn_epoch, burn_epoch + timedelta(hours=burn_time_before_tca + 2)
+    if optimize:
+        console.print(f"[bold magenta]Running SLSQP Optimizer for burn at T-{burn_time_before_tca}h...[/bold magenta]")
+        optimizer = ManeuverOptimizer(
+            base_prop=base_prop,
+            primary_state=p_state,
+            secondary_state=s_state,
+            primary_cov=p_cov,
+            secondary_cov=s_cov,
+            burn_epoch=burn_epoch,
+            target_pc=1e-5
         )
         
-        if new_tca_result:
-            new_tca, new_miss = new_tca_result
-            p_new_tca = man_prop.propagate_to(p_state, new_tca)
-            s_new_tca = base_prop.propagate_to(s_state, new_tca)
-            new_v_rel = float(np.linalg.norm(p_new_tca.v - s_new_tca.v))
+        with Progress(SpinnerColumn(), TextColumn("[magenta]{task.description}")) as progress:
+            task = progress.add_task("Optimizing 3D thrust vector...")
+            result = optimizer.optimize()
             
-            new_event = ConjunctionEvent(
-                primary_id=primary, secondary_id=secondary, tca=new_tca,
-                miss_distance_km=new_miss, relative_velocity_km_s=new_v_rel,
-                primary_state=p_new_tca, secondary_state=s_new_tca,
-                primary_covariance=p_cov, secondary_covariance=s_cov
-            )
+        if result["success"]:
+            dv = result["optimal_dv_km_s"]
+            dv_mag = result["dv_mag_cm_s"]
+            console.print("[bold green]✓ Optimization Converged[/bold green]")
+            console.print(f"Optimal Delta-V: [bold cyan]{dv_mag:.3f} cm/s[/bold cyan]  (Vector: {dv * 1e5} cm/s)")
+            console.print(f"Final Pc: [bold green]{result['final_pc']:.2e}[/bold green]")
+            console.print(f"Iterations: {result['iterations']}")
+        else:
+            console.print(f"[bold red]✗ Optimization Failed: {result['message']}[/bold red]")
             
-            new_risk = risk_calc.compute_pc(new_event)
-            pc_str = f"{new_risk.pc:.2e}"
-            
-            if new_risk.warning_level == "GREEN":
-                status = "[green]SAFE[/green]"
-                pc_str = f"[green]{pc_str}[/green]"
-            elif new_risk.warning_level == "YELLOW":
-                status = "[yellow]ELEVATED[/yellow]"
-                pc_str = f"[yellow]{pc_str}[/yellow]"
-            else:
-                status = "[red]DANGER[/red]"
-                pc_str = f"[red]{pc_str}[/red]"
-                
-            dir_str = "Prograde" if dv_cm > 0 else "Retrograde"
-            
-            table.add_row(f"{dv_cm:+.1f}", dir_str, f"{new_miss:.3f}", pc_str, status)
+    else:
+        # 2. Setup Trade Space
+        console.print(f"Simulating maneuvers at T-{burn_time_before_tca}h ({burn_epoch.strftime('%H:%M:%S')})")
+        
+        # We will simulate prograde and retrograde burns (along the velocity vector)
+        # Get velocity vector at burn epoch to figure out along-track direction
+        burn_state = base_prop.propagate_to(p_state, burn_epoch)
+        v_hat = burn_state.v / np.linalg.norm(burn_state.v)
+        
+        test_dvs_cm_s = [-5.0, -1.0, -0.5, -0.1, 0.1, 0.5, 1.0, 5.0]  # cm/s
+        
+        table = Table(title="Collision Avoidance Trade Space")
+        table.add_column("Maneuver (cm/s)", justify="right", style="cyan")
+        table.add_column("Direction", style="blue")
+        table.add_column("New Miss (km)", justify="right")
+        table.add_column("New Pc", justify="right", style="bold")
+        table.add_column("Status", justify="center")
 
-    console.print(table)
+        with Progress(SpinnerColumn(), TextColumn("[cyan]{task.description}")) as progress:
+            task = progress.add_task("Simulating trade space...")
+            
+            for dv_cm in test_dvs_cm_s:
+                dv_km_s = (dv_cm / 100.0) / 1000.0
+                delta_v_vec = v_hat * dv_km_s
+                
+                maneuver = Maneuver(burn_epoch=burn_epoch, delta_v_eci=delta_v_vec)
+                man_prop = ManeuverPropagator(base_propagator=base_prop, maneuvers=[maneuver])
+                
+                # Find new TCA with maneuver
+                new_tca_result = tca_finder.find_tca(
+                    p_state, man_prop, s_state, base_prop, 
+                    burn_epoch, burn_epoch + timedelta(hours=burn_time_before_tca + 2)
+                )
+                
+                if new_tca_result:
+                    new_tca, new_miss = new_tca_result
+                    p_new_tca = man_prop.propagate_to(p_state, new_tca)
+                    s_new_tca = base_prop.propagate_to(s_state, new_tca)
+                    new_v_rel = float(np.linalg.norm(p_new_tca.v - s_new_tca.v))
+                    
+                    new_event = ConjunctionEvent(
+                        primary_id=primary, secondary_id=secondary, tca=new_tca,
+                        miss_distance_km=new_miss, relative_velocity_km_s=new_v_rel,
+                        primary_state=p_new_tca, secondary_state=s_new_tca,
+                        primary_covariance=p_cov, secondary_covariance=s_cov
+                    )
+                    
+                    new_risk = risk_calc.compute_pc(new_event)
+                    pc_str = f"{new_risk.pc:.2e}"
+                    
+                    if new_risk.warning_level == "GREEN":
+                        status = "[green]SAFE[/green]"
+                        pc_str = f"[green]{pc_str}[/green]"
+                    elif new_risk.warning_level == "YELLOW":
+                        status = "[yellow]ELEVATED[/yellow]"
+                        pc_str = f"[yellow]{pc_str}[/yellow]"
+                    else:
+                        status = "[red]DANGER[/red]"
+                        pc_str = f"[red]{pc_str}[/red]"
+                        
+                    dir_str = "Prograde" if dv_cm > 0 else "Retrograde"
+                    
+                    table.add_row(f"{dv_cm:+.1f}", dir_str, f"{new_miss:.3f}", pc_str, status)
+
+        console.print(table)

@@ -63,6 +63,35 @@ class CacheManager:
                     bstar               REAL
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS risk_history (
+                    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                    primary_id          TEXT NOT NULL,
+                    secondary_id        TEXT NOT NULL,
+                    evaluation_time     TEXT NOT NULL,
+                    tca                 TEXT NOT NULL,
+                    pc                  REAL NOT NULL,
+                    miss_distance_km    REAL NOT NULL,
+                    warning_level       TEXT NOT NULL
+                )
+            """)
+
+    def log_risk_event(self, primary_id: str, secondary_id: str, tca: datetime, pc: float, miss_distance_km: float, warning_level: str) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                INSERT INTO risk_history (primary_id, secondary_id, evaluation_time, tca, pc, miss_distance_km, warning_level)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (primary_id, secondary_id, datetime.now(UTC).isoformat(), tca.isoformat(), pc, miss_distance_km, warning_level))
+
+    def get_risk_history(self, primary_id: str, secondary_id: str, limit: int = 100) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT * FROM risk_history 
+                WHERE primary_id = ? AND secondary_id = ? 
+                ORDER BY evaluation_time ASC LIMIT ?
+            """, (primary_id, secondary_id, limit))
+            return [dict(row) for row in cursor.fetchall()]
 
     def get(self, key: str) -> str | None:
         """Return cached value if it exists and hasn't expired."""
