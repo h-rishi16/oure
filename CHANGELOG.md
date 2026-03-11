@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2026-03-11
 
 ### Added
+- **Async I/O Ingestion:** Upgraded `SpaceTrackFetcher` to use `httpx` and `asyncio` for chunked, non-blocking fetching of massive TLE catalogs.
+- **Interactive Visualizations:** New `oure plot` command outputs a 2D interactive HTML/Plotly scatter plot projecting the collision risk and uncertainty ellipses onto the B-Plane.
 - **Core Architecture:** Implemented a strict 5-layer decoupled architecture (Core, Data, Physics, Uncertainty, Conjunction/Risk).
 - **Physics Engine:** Added `SGP4Propagator`, `J2PerturbationCorrector`, and `AtmosphericDragCorrector` using a decorator pattern.
 - **Vectorized Operations:** Replaced Python `for` loops with pure NumPy vectorized math for the Kepler solver, coordinate frame transformations, and state batch propagation.

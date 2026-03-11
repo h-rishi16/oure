@@ -1,31 +1,43 @@
-from unittest.mock import MagicMock, patch
-
+import pytest
+from unittest.mock import patch, MagicMock, AsyncMock
 from oure.data.spacetrack import SpaceTrackFetcher
+from oure.data.cache import CacheManager
+import httpx
 
+@pytest.fixture
+def cache_manager(tmp_path):
+    return CacheManager(db_path=tmp_path / "test_cache.db")
 
-@patch('requests.Session')
-def test_spacetrack_fetcher_login_success(mock_session, cache_manager):
-    mock_post = MagicMock()
-    mock_post.text = "successful"
-    mock_session_instance = mock_session.return_value
-    mock_session_instance.post.return_value = mock_post
+@pytest.mark.asyncio
+@patch('httpx.AsyncClient')
+async def test_spacetrack_fetcher_login_success(mock_client_class, cache_manager):
+    mock_client = AsyncMock()
+    mock_post_response = MagicMock()
+    mock_post_response.text = "successful"
+    mock_post_response.raise_for_status = MagicMock()
+    mock_client.post.return_value = mock_post_response
+    
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     fetcher = SpaceTrackFetcher(username="test", password="password", cache=cache_manager)
-    session = fetcher._login()
+    await fetcher._async_login(mock_client)
 
-    mock_session_instance.post.assert_called_once_with(
+    mock_client.post.assert_called_once_with(
         fetcher.LOGIN_URL,
         data={"identity": "test", "password": "password"},
-        timeout=30
+        timeout=30.0
     )
-    assert session is not None
 
-@patch('requests.Session')
-def test_spacetrack_fetcher_fetch_from_network(mock_session, cache_manager):
-    mock_post = MagicMock()
-    mock_post.text = "successful"
-    mock_get = MagicMock()
-    mock_get.json.return_value = [
+@patch('httpx.AsyncClient')
+def test_spacetrack_fetcher_fetch_from_network(mock_client_class, cache_manager):
+    mock_client = AsyncMock()
+    
+    mock_post_response = MagicMock()
+    mock_post_response.text = "successful"
+    mock_client.post.return_value = mock_post_response
+    
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = [
         {
             "NORAD_CAT_ID": "25544",
             "OBJECT_NAME": "ISS (ZARYA)",
@@ -41,27 +53,28 @@ def test_spacetrack_fetcher_fetch_from_network(mock_session, cache_manager):
             "BSTAR": 0.00016715
         }
     ]
-    mock_session_instance = mock_session.return_value
-    mock_session_instance.post.return_value = mock_post
-    mock_session_instance.get.return_value = mock_get
+    mock_client.get.return_value = mock_get_response
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     fetcher = SpaceTrackFetcher(username="test", password="password", cache=cache_manager)
     records = fetcher._fetch_from_network(sat_ids=["25544"])
 
     assert len(records) == 1
     assert records[0].sat_id == "25544"
-    assert mock_session_instance.get.call_count == 2
+    # Expect 2 calls: one for the TLE data, one for logout
+    assert mock_client.get.call_count == 2
 
-@patch('requests.Session')
-def test_spacetrack_fetcher_cache_logic(mock_session, cache_manager):
-    # This test will check the fetch method's caching logic
+@patch('httpx.AsyncClient')
+def test_spacetrack_fetcher_cache_logic(mock_client_class, cache_manager):
     fetcher = SpaceTrackFetcher(username="test", password="password", cache=cache_manager)
-
-    # 1. First call (network fetch)
-    mock_post = MagicMock()
-    mock_post.text = "successful"
-    mock_get = MagicMock()
-    mock_get.json.return_value = [
+    
+    mock_client = AsyncMock()
+    mock_post_response = MagicMock()
+    mock_post_response.text = "successful"
+    mock_client.post.return_value = mock_post_response
+    
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = [
         {
             "NORAD_CAT_ID": "12345",
             "OBJECT_NAME": "DUMMY",
@@ -77,14 +90,14 @@ def test_spacetrack_fetcher_cache_logic(mock_session, cache_manager):
             "BSTAR": 0.0
         }
     ]
-    mock_session_instance = mock_session.return_value
-    mock_session_instance.post.return_value = mock_post
-    mock_session_instance.get.return_value = mock_get
-
+    mock_client.get.return_value = mock_get_response
+    mock_client_class.return_value.__aenter__.return_value = mock_client
+    
+    # 1. First call (network fetch)
     fetcher.fetch(sat_ids=["12345"])
-    assert mock_session_instance.get.call_count == 2
+    assert mock_client.get.call_count == 2
 
     # 2. Second call (cache hit)
-    mock_session_instance.get.reset_mock()
+    mock_client.get.reset_mock()
     fetcher.fetch(sat_ids=["12345"])
-    mock_session_instance.get.assert_not_called()
+    mock_client.get.assert_not_called()

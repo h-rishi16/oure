@@ -5,12 +5,13 @@ OURE Data Ingestion Layer - Space-Track.org TLE Fetcher
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import random
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import requests
+import httpx
 from tenacity import (
     before_sleep_log,
     retry,
@@ -30,22 +31,14 @@ logger = logging.getLogger("oure.data.spacetrack")
 _RETRY_POLICY = retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=60),
-    retry=retry_if_exception_type((requests.Timeout, requests.ConnectionError)),
+    retry=retry_if_exception_type((httpx.TimeoutException, httpx.ConnectError)),
     before_sleep=before_sleep_log(logger, logging.WARNING),
     reraise=True,
 )
 
 class SpaceTrackFetcher(BaseDataFetcher):
     """
-    Authenticates with Space-Track.org and downloads TLE data.
-
-    API flow:
-      POST /ajaxauth/login  → sets session cookie
-      GET  /basicspacedata/query/class/tle_latest/...  → returns JSON TLEs
-      GET  /ajaxauth/logout
-
-    Rate limits: ~200 requests/hour. The cache layer makes this a non-issue
-    for repeat runs within a 24-hour window.
+    Authenticates with Space-Track.org and downloads TLE data concurrently.
     """
 
     BASE_URL = "https://www.space-track.org"
@@ -54,6 +47,7 @@ class SpaceTrackFetcher(BaseDataFetcher):
         f"{BASE_URL}/basicspacedata/query/class/tle_latest"
         "/ORDINAL/1/EPOCH/>now-30/orderby/NORAD_CAT_ID/format/json"
     )
+    CHUNK_SIZE = 300  # Space-Track limits URI length
 
     def __init__(
         self,
@@ -66,30 +60,23 @@ class SpaceTrackFetcher(BaseDataFetcher):
         self.password = password
         self.cache = cache or CacheManager()
         self.cache_ttl = cache_ttl_hours * 3600
-        self._session: requests.Session | None = None
 
-    def _login(self) -> requests.Session:
-        session = requests.Session()
-        resp = session.post(
+    async def _async_login(self, client: httpx.AsyncClient) -> None:
+        resp = await client.post(
             self.LOGIN_URL,
             data={"identity": self.username, "password": self.password},
-            timeout=30
+            timeout=30.0
         )
         resp.raise_for_status()
         if "Failed" in resp.text:
             raise ValueError("Space-Track authentication failed. Check credentials.")
         logger.info("Authenticated with Space-Track.org")
-        return session
 
-    def _logout(self, session: requests.Session) -> None:
-        session.get(f"{self.BASE_URL}/ajaxauth/logout", timeout=10)
+    async def _async_logout(self, client: httpx.AsyncClient) -> None:
+        await client.get(f"{self.BASE_URL}/ajaxauth/logout", timeout=10.0)
         logger.info("Logged out from Space-Track.org")
 
     def fetch(self, sat_ids: list[str] | None = None, **kwargs: Any) -> list[Any]:
-        """
-        Fetch TLEs for given NORAD IDs (or all LEO objects if None).
-        Checks the local cache before hitting the network.
-        """
         if sat_ids:
             results, missing = [], []
             for sid in sat_ids:
@@ -100,7 +87,7 @@ class SpaceTrackFetcher(BaseDataFetcher):
                 else:
                     missing.append(sid)
             if missing:
-                logger.info(f"Cache MISS for {len(missing)} satellites — fetching network")
+                logger.info(f"Cache MISS for {len(missing)} satellites — fetching network asynchronously")
                 fresh = self._fetch_from_network(sat_ids=missing)
                 results.extend(fresh)
             return results
@@ -113,31 +100,45 @@ class SpaceTrackFetcher(BaseDataFetcher):
             self.cache.set(cache_key, "fresh", self.cache_ttl)
             return records
 
-    @_RETRY_POLICY
     def _fetch_from_network(self, sat_ids: list[str] | None = None, **kwargs: Any) -> list[Any]:
+        return asyncio.run(self._fetch_all_async(sat_ids))
+
+    @_RETRY_POLICY
+    async def _fetch_chunk(self, client: httpx.AsyncClient, chunk: list[str]) -> list[dict[str, Any]]:
+        ids_str = ",".join(chunk)
+        url = (
+            f"{self.BASE_URL}/basicspacedata/query/class/tle_latest"
+            f"/NORAD_CAT_ID/{ids_str}/ORDINAL/1/format/json"
+        )
+        resp = await client.get(url, timeout=60.0)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def _fetch_all_async(self, sat_ids: list[str] | None = None) -> list[TLERecord]:
+        raw_data = []
         try:
-            session = self._login()
-            url = self.QUERY_URL
-            if sat_ids:
-                ids_str = ",".join(sat_ids)
-                url = (
-                    f"{self.BASE_URL}/basicspacedata/query/class/tle_latest"
-                    f"/NORAD_CAT_ID/{ids_str}/ORDINAL/1/format/json"
-                )
-            resp = session.get(url, timeout=60)
-            resp.raise_for_status()
-            raw_data = resp.json()
+            async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
+                await self._async_login(client)
+                try:
+                    if not sat_ids:
+                        resp = await client.get(self.QUERY_URL, timeout=120.0)
+                        resp.raise_for_status()
+                        raw_data = resp.json()
+                    else:
+                        chunks = [sat_ids[i:i + self.CHUNK_SIZE] for i in range(0, len(sat_ids), self.CHUNK_SIZE)]
+                        tasks = [self._fetch_chunk(client, chunk) for chunk in chunks]
+                        results = await asyncio.gather(*tasks)
+                        for r in results:
+                            raw_data.extend(r)
+                finally:
+                    await self._async_logout(client)
         except Exception as e:
             logger.warning(f"Network error fetching from Space-Track: {e}. Generating Mock TLEs.")
             return self._generate_mock_tles(sat_ids)
-        finally:
-            if 'session' in locals() and session:
-                self._logout(session)
 
         records = []
         for d in raw_data:
             try:
-                # Validate with Pydantic first
                 valid_data = TLERecordSchema(**d)
                 records.append(self._parse_tle_record(valid_data.model_dump(mode='json')))
             except Exception as e:
