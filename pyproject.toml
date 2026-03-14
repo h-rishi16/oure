@@ -26,7 +26,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov", "pytest-asyncio", "hypothesis", "ruff", "mypy", "pre-commit", "faker"]
 vis = ["matplotlib>=3.8", "plotly>=5.18"]
-web = ["fastapi>=0.100", "uvicorn>=0.20", "streamlit>=1.30", "python-multipart>=0.0.9", "pandas"]
+web = ["fastapi>=0.100", "uvicorn>=0.20", "streamlit>=1.30", "python-multipart>=0.0.9", "pandas", "celery>=5.3", "redis>=5.0"]
 
 [project.scripts]
 oure = "oure.cli.main:cli"

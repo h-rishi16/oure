@@ -1,4 +1,8 @@
 #!/bin/bash
+echo "Starting Celery Background Worker..."
+.venv/bin/celery -A oure.api.celery_app worker --loglevel=info &
+CELERY_PID=$!
+
 echo "Starting OURE Web API on port 8000..."
 .venv/bin/uvicorn oure.api.main:app --host 0.0.0.0 --port 8000 &
 API_PID=$!
@@ -12,5 +16,5 @@ echo "API Docs: http://localhost:8000/docs"
 echo "Dashboard: http://localhost:8501"
 
 # Wait for user to press Ctrl+C
-trap "echo 'Shutting down...'; kill $API_PID; kill $DASH_PID; exit" INT
+trap "echo 'Shutting down...'; kill $CELERY_PID; kill $API_PID; kill $DASH_PID; exit" INT
 wait

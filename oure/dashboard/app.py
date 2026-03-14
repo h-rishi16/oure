@@ -9,7 +9,7 @@ st.title("🛰️ OURE Space Operations Center")
 st.markdown("Monitor high-risk conjunction events and analyze Conjunction Data Messages (CDMs) in real-time.")
 
 st.sidebar.header("Navigation")
-page = st.sidebar.radio("Go to", ["Live Fleet Status", "CDM Analysis Tool", "Risk Evolution History"])
+page = st.sidebar.radio("Go to", ["Live Fleet Status", "CDM Analysis Tool", "Risk Evolution History", "Background Task Manager"])
 
 # --- PAGE 1: Live Fleet Status ---
 if page == "Live Fleet Status":
@@ -165,3 +165,56 @@ elif page == "Risk Evolution History":
                 st.dataframe(df)
         except Exception as e:
             st.error(f"Error loading history: {e}")
+
+# --- PAGE 4: Background Task Manager ---
+elif page == "Background Task Manager":
+    st.header("Distributed Fleet Screening (Celery)")
+    st.markdown("Submit massive O(N log N) KD-Tree fleet screening jobs to the Celery background worker queue.")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        primary_id = st.text_input("Primary NORAD ID to Screen", value="25544")
+    with col2:
+        secondary_ids_raw = st.text_area("Secondary IDs (comma separated)", value="43205,47813,40379")
+        
+    if st.button("Submit Screening Job"):
+        secondary_ids = [s.strip() for s in secondary_ids_raw.split(",")]
+        try:
+            # Send to FastAPI
+            response = requests.post(
+                "http://localhost:8000/tasks/screen", 
+                json={"primary_id": primary_id, "secondary_ids": secondary_ids}
+            )
+            response.raise_for_status()
+            task_id = response.json()["task_id"]
+            st.session_state['current_task_id'] = task_id
+            st.success(f"Task Submitted Successfully! Task ID: `{task_id}`")
+        except Exception as e:
+            st.error(f"Failed to submit task. Is the FastAPI backend running? Error: {e}")
+            
+    st.divider()
+    st.subheader("Task Status Tracker")
+    
+    # Simple polling UI
+    task_to_check = st.text_input("Enter Task ID to check status", value=st.session_state.get('current_task_id', ''))
+    if st.button("Check Status") and task_to_check:
+        try:
+            res = requests.get(f"http://localhost:8000/tasks/{task_to_check}")
+            res.raise_for_status()
+            data = res.json()
+            
+            state = data["state"]
+            if state == "PENDING":
+                st.info("Task is pending in the queue...")
+            elif state == "PROGRESS":
+                st.warning(f"Task is running: {data.get('meta', {}).get('status', 'Processing...')}")
+            elif state == "SUCCESS":
+                st.success("Task Completed!")
+                st.json(data["result"])
+            elif state == "FAILURE":
+                st.error(f"Task Failed: {data.get('error', 'Unknown Error')}")
+            else:
+                st.write(f"State: {state}")
+                
+        except Exception as e:
+            st.error(f"Failed to fetch task status. Is the FastAPI backend running? Error: {e}")
