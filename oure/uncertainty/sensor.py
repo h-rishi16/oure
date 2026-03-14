@@ -5,7 +5,9 @@ Simulates the reduction in covariance when new radar measurements are taken.
 """
 
 import numpy as np
+
 from oure.core.models import CovarianceMatrix
+
 
 class SensorTaskingSimulator:
     """
@@ -29,24 +31,24 @@ class SensorTaskingSimulator:
             K = Kalman Gain = P_prior * H^T * (H * P_prior * H^T + R)^-1
         """
         P_minus = prior_cov.matrix
-        
+
         # Observation matrix (we observe the first 3 state variables: x, y, z)
         H = np.zeros((3, 6))
         H[:, :3] = np.eye(3)
-        
+
         # Innovation covariance (S = H*P*H^T + R)
         S = H @ P_minus @ H.T + self.R
-        
+
         # Kalman Gain (K = P*H^T*S^-1)
         K = P_minus @ H.T @ np.linalg.inv(S)
-        
+
         # Posterior covariance (P_plus = (I - K*H)*P_minus)
         I = np.eye(6)
         P_plus = (I - K @ H) @ P_minus
-        
+
         # Ensure symmetry (Joseph form could also be used, but this is fine for simulation)
         P_plus = 0.5 * (P_plus + P_plus.T)
-        
+
         return CovarianceMatrix(
             matrix=P_plus,
             epoch=prior_cov.epoch,

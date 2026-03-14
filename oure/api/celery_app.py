@@ -4,6 +4,7 @@ OURE Celery Application
 """
 
 import os
+
 from celery import Celery
 
 # Allow pointing to a local Redis instance or fallback to a dummy memory broker for testing

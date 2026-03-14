@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -11,9 +11,14 @@ def runner():
     return CliRunner()
 
 @patch('oure.cli.main.OUREContext')
-def test_fetch_no_args(mock_context, runner):
-    result = runner.invoke(cli, ['fetch'])
-    assert result.exit_code != 0 # Fails missing st-username/pass
+def test_fetch_no_args(mock_context_class, runner):
+    mock_ctx = MagicMock()
+    mock_context_class.return_value = mock_ctx
+    mock_ctx.flux_fetcher.fetch.return_value = []
+    mock_ctx.tle_fetcher.fetch.return_value = []
+    
+    result = runner.invoke(cli, ['--st-username', 'u', '--st-password', 'p', 'fetch'])
+    assert result.exit_code == 0 
 
 def test_cache_status(runner, tmp_path):
     with patch('oure.cli.main.Path') as mock_path:

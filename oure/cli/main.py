@@ -72,18 +72,20 @@ def cli(ctx: click.Context, st_username: str, st_password: str, db_path: str | N
     )
 
 # Import commands to register them with the CLI group
-from . import cmd_fetch
-from . import cmd_analyze
-from . import cmd_monitor
-from . import cmd_cache
-from . import cmd_report
-from . import cmd_plot
-from . import cmd_avoid
-from . import cmd_fleet
-from . import cmd_cdm
-from . import cmd_history
-from . import cmd_shatter
-from . import cmd_sensor
+from . import (
+    cmd_analyze,
+    cmd_avoid,
+    cmd_cache,
+    cmd_cdm,
+    cmd_fetch,
+    cmd_fleet,
+    cmd_history,
+    cmd_monitor,
+    cmd_plot,
+    cmd_report,
+    cmd_sensor,
+    cmd_shatter,
+)
 
 if __name__ == "__main__":
     cli(auto_envvar_prefix="OURE")

@@ -76,7 +76,7 @@ class SpaceTrackFetcher(BaseDataFetcher):
         await client.get(f"{self.BASE_URL}/ajaxauth/logout", timeout=10.0)
         logger.info("Logged out from Space-Track.org")
 
-    def fetch(self, sat_ids: list[str] | None = None, **kwargs: Any) -> list[Any]:
+    def fetch(self, sat_ids: list[str] | None = None, **kwargs: Any) -> list[TLERecord]:
         if sat_ids:
             results, missing = [], []
             for sid in sat_ids:
@@ -100,7 +100,7 @@ class SpaceTrackFetcher(BaseDataFetcher):
             self.cache.set(cache_key, "fresh", self.cache_ttl)
             return records
 
-    def _fetch_from_network(self, sat_ids: list[str] | None = None, **kwargs: Any) -> list[Any]:
+    def _fetch_from_network(self, sat_ids: list[str] | None = None, **kwargs: Any) -> list[TLERecord]:
         return asyncio.run(self._fetch_all_async(sat_ids))
 
     @_RETRY_POLICY
@@ -112,10 +112,11 @@ class SpaceTrackFetcher(BaseDataFetcher):
         )
         resp = await client.get(url, timeout=60.0)
         resp.raise_for_status()
-        return resp.json()
+        data: list[dict[str, Any]] = resp.json()
+        return data
 
     async def _fetch_all_async(self, sat_ids: list[str] | None = None) -> list[TLERecord]:
-        raw_data = []
+        raw_data: list[dict[str, Any]] = []
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
                 await self._async_login(client)
@@ -127,8 +128,8 @@ class SpaceTrackFetcher(BaseDataFetcher):
                     else:
                         chunks = [sat_ids[i:i + self.CHUNK_SIZE] for i in range(0, len(sat_ids), self.CHUNK_SIZE)]
                         tasks = [self._fetch_chunk(client, chunk) for chunk in chunks]
-                        results = await asyncio.gather(*tasks)
-                        for r in results:
+                        chunk_results = await asyncio.gather(*tasks)
+                        for r in chunk_results:
                             raw_data.extend(r)
                 finally:
                     await self._async_logout(client)
@@ -136,19 +137,19 @@ class SpaceTrackFetcher(BaseDataFetcher):
             logger.warning(f"Network error fetching from Space-Track: {e}. Generating Mock TLEs.")
             return self._generate_mock_tles(sat_ids)
 
-        records = []
+        parsed_records: list[TLERecord] = []
         for d in raw_data:
             try:
                 valid_data = TLERecordSchema(**d)
-                records.append(self._parse_tle_record(valid_data.model_dump(mode='json')))
+                parsed_records.append(self._parse_tle_record(valid_data.model_dump(mode='json')))
             except Exception as e:
                 logger.warning(f"Failed to validate TLE record: {e}")
                 continue
 
-        for r in records:
-            self.cache.cache_tle(r)
-        logger.info(f"Fetched and cached {len(records)} TLE records")
-        return records
+        for rec in parsed_records:
+            self.cache.cache_tle(rec)
+        logger.info(f"Fetched and cached {len(parsed_records)} TLE records")
+        return parsed_records
 
     def _generate_mock_tles(self, sat_ids: list[str] | None = None) -> list[TLERecord]:
         """Fall back to generated mock TLEs if the network is unavailable."""
@@ -176,7 +177,7 @@ class SpaceTrackFetcher(BaseDataFetcher):
     def _parse_tle_record(self, data: dict[str, Any]) -> TLERecord:
         epoch_str = data.get("EPOCH", "")
         try:
-            epoch = datetime.strptime(epoch_str, "%Y-%m-%d %H:%M:%S")
+            epoch = datetime.strptime(epoch_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
         except ValueError:
             epoch = datetime.now(UTC)
 

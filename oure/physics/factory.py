@@ -10,6 +10,7 @@ import logging
 from oure.core import constants
 from oure.core.models import TLERecord
 
+from oure.core.constants import SOLAR_FLUX_MEAN_SFU
 from .base import BasePropagator
 from .drag_corrector import AtmosphericDragCorrector
 from .j2_corrector import J2PerturbationCorrector
@@ -25,8 +26,8 @@ class PropagatorFactory:
     @staticmethod
     def build(
         tle: TLERecord,
-        solar_flux: float = constants.SOLAR_FLUX_MEAN_SFU,
-        include_j2: bool = True,
+        solar_flux: float = SOLAR_FLUX_MEAN_SFU,
+        include_j2: bool = False,
         include_drag: bool = True,
         cd: float = 2.2,
         area_m2: float = 10.0,

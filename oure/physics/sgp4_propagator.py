@@ -55,26 +55,33 @@ class SGP4Propagator(BasePropagator):
 
     def propagate_many_to(self, states: np.ndarray, initial_epoch: datetime, target_epoch: datetime) -> np.ndarray:
         sat = self._satellite
+
+        # SGP4 mean elements logic
+        # tsince is in minutes since the TLE epoch
         tsince = (target_epoch - sat["epoch"]).total_seconds() / 60.0
         dt_s = tsince * 60.0
 
+        # Secular drag decay
         a = sat["a0"] * (1 - (2/3) * sat["bstar"] * sat["n0"] * tsince * 60)
         n = np.sqrt(constants.MU_KM3_S2 / max(a, constants.R_EARTH_KM)**3)
 
-        e = np.full(states.shape[0], sat["e0"])
-        i = np.full(states.shape[0], sat["i0"])
+        # Extract initial COE from input states to allow for state perturbations
+        _, e, i_rad, raan0, omega0, nu0 = rv2coe_vectorized(states[:, :3], states[:, 3:])
+
+        # Conver true anomaly to mean anomaly
+        E0 = 2 * np.arctan(np.sqrt((1-e)/(1+e)) * np.tan(nu0/2))
+        M0 = E0 - e * np.sin(E0)
 
         p = a * (1 - e**2)
         j2_factor = (3/2) * constants.J2 * (constants.R_EARTH_KM / p)**2
 
-        raan  = sat["raan0"]  - j2_factor * n * np.cos(i) * dt_s
-        omega = sat["omega0"] + j2_factor * n * (2.5*np.cos(i)**2 - 0.5) * dt_s
-
-        _, _, _, _, _, nu0 = rv2coe_vectorized(states[:, :3], states[:, 3:])
-        E0 = 2 * np.arctan(np.sqrt((1-e)/(1+e)) * np.tan(nu0/2))
-        M0 = E0 - e * np.sin(E0)
-
         dt_since_initial = (target_epoch - initial_epoch).total_seconds()
+
+        # Apply J2 secular drifts to RAAN and Omega
+        raan  = raan0  - j2_factor * n * np.cos(i_rad) * dt_since_initial
+        omega = omega0 + j2_factor * n * (2.5*np.cos(i_rad)**2 - 0.5) * dt_since_initial
+
+        # Advance mean anomaly
         M = M0 + n * dt_since_initial
         E = solve_kepler_vectorized(M, e)
 
@@ -82,10 +89,9 @@ class SGP4Propagator(BasePropagator):
         cos_nu = (np.cos(E) - e) / (1 - e*np.cos(E))
         nu = np.arctan2(sin_nu, cos_nu)
 
-        r_vecs, v_vecs = self._elements_to_eci_vectorized(a, e, i, raan, omega, nu)
+        r_vecs, v_vecs = self._elements_to_eci_vectorized(a, e, i_rad, raan, omega, nu)
 
         return np.hstack([r_vecs, v_vecs])
-
     def _elements_to_eci_vectorized(self, a: np.ndarray, e: np.ndarray, i: np.ndarray, raan: np.ndarray, omega: np.ndarray, nu: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         p = a * (1 - e**2)
         r_mag = p / (1 + e * np.cos(nu))

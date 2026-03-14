@@ -1,13 +1,13 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from pydantic import BaseModel
-from typing import List, Optional
-import tempfile
 import os
+import tempfile
 
+from celery.result import AsyncResult
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from pydantic import BaseModel
+
+from oure.api.tasks import run_fleet_screening
 from oure.data.cdm_parser import CDMParser
 from oure.risk.calculator import RiskCalculator
-from oure.api.tasks import run_fleet_screening
-from celery.result import AsyncResult
 
 app = FastAPI(title="OURE API", version="1.0.0", description="Orbital Uncertainty & Risk Engine API")
 
@@ -22,60 +22,59 @@ class RiskResponse(BaseModel):
 
 class TaskSubmitRequest(BaseModel):
     primary_id: str
-    secondary_ids: List[str]
+    secondary_ids: list[str]
 
 @app.get("/health")
-def health_check():
+def health_check() -> dict[str, str]:
     """Verify the API is running."""
     return {"status": "operational", "version": "1.0.0"}
 
 @app.post("/tasks/screen")
-def submit_screening_task(req: TaskSubmitRequest):
+def submit_screening_task(req: TaskSubmitRequest) -> dict[str, str]:
     """Submit a fleet screening job to the background Celery worker queue."""
     task = run_fleet_screening.delay(req.primary_id, req.secondary_ids)
     return {"task_id": str(task.id), "status": "submitted"}
 
 @app.get("/tasks/{task_id}")
-def get_task_status(task_id: str):
+def get_task_status(task_id: str) -> dict[str, object]:
     """Retrieve the status and results of a background Celery task."""
     task_result = AsyncResult(task_id)
-    response = {
+    response: dict[str, object] = {
         "task_id": task_id,
         "state": task_result.state,
     }
-    
+
     if task_result.state == 'PROGRESS':
         response["meta"] = task_result.info
     elif task_result.state == 'SUCCESS':
         response["result"] = task_result.result
     elif task_result.state == 'FAILURE':
         response["error"] = str(task_result.info)
-        
+
     return response
 
 @app.post("/analyze/cdm", response_model=RiskResponse)
-async def analyze_cdm(file: UploadFile = File(...), hard_body_radius: float = 20.0):
+async def analyze_cdm(file: UploadFile = File(...), hard_body_radius: float = 20.0) -> RiskResponse:
     """
     Upload a JSON CDM file and receive a risk assessment.
     """
-    if not file.filename.endswith('.json'):
+    if not file.filename or not file.filename.endswith('.json'):
         raise HTTPException(status_code=400, detail="Only JSON CDMs are supported.")
-        
+
     try:
         # Save uploaded file temporarily to parse it
-        with tempfile.NamedNamedTemporaryFile(delete=False, suffix=".json") as temp_file:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_file:
             contents = await file.read()
             temp_file.write(contents)
             temp_path = temp_file.name
-            
         # Parse and calculate
         event = CDMParser.parse_json(temp_path)
         calc = RiskCalculator(hard_body_radius_m=hard_body_radius)
         result = calc.compute_pc(event)
-        
+
         # Cleanup
         os.unlink(temp_path)
-        
+
         return RiskResponse(
             primary_id=result.conjunction.primary_id,
             secondary_id=result.conjunction.secondary_id,

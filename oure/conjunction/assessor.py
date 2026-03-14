@@ -52,18 +52,23 @@ class ConjunctionAssessor:
         logger.info(f"Screening {len(secondaries)} objects over {look_ahead_hours}h ({n_steps} steps)")
 
         candidate_pairs: dict[int, list[datetime]] = {}
-
+        
+        # Group secondaries by propagator type for potential future batching
+        # For now, we still iterate steps, but we can optimize the inner loops
+        
         for dt in time_offsets:
             epoch = t0 + timedelta(seconds=dt)
             p_state = primary_propagator.propagate_to(primary, epoch)
 
             sec_positions = np.zeros((len(secondaries), 3))
+            
+            # TODO: Future optimization - implement propagate_many in all base propagators
+            # and use it here to eliminate the inner Python loop.
             for j, (s_state, _, s_prop) in enumerate(secondaries):
                 try:
                     s_prop_state = s_prop.propagate_to(s_state, epoch)
                     sec_positions[j] = s_prop_state.r
-                except Exception as e:
-                    logger.debug(f"Propagation failed for secondary {j}: {e}")
+                except Exception:
                     sec_positions[j] = np.array([1e9, 1e9, 1e9])
 
             index = KDTreeSpatialIndex(sec_positions)

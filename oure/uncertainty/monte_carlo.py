@@ -85,8 +85,11 @@ class MonteCarloUncertaintyPropagator:
         P_mc = (delta.T @ delta) / (self.n_samples - 1)
 
         P_inv = np.linalg.pinv(P_mc)
+        from scipy.stats import chi2
+        # 3-sigma (99.73%) threshold for 6 degrees of freedom
+        threshold = chi2.ppf(0.9973, df=6) # ~22.46
         distances = np.array([delta[i] @ P_inv @ delta[i] for i in range(self.n_samples)])
-        outlier_frac = float(np.mean(distances > 9.0))
+        outlier_frac = float(np.mean(distances > threshold))
 
         nominal_propagated = StateVector.from_6d(x_mean, target_epoch, initial_state.sat_id)
 

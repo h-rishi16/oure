@@ -9,6 +9,7 @@ import numpy as np
 
 from oure.core.models import ConjunctionEvent, RiskResult
 
+from .alert import AlertClassifier
 from .bplane import BPlaneProjector
 from .foster import FosterPcCalculator
 
@@ -34,7 +35,9 @@ class RiskCalculator:
         sigma_x = np.sqrt(projection.C_2d[0, 0])
         sigma_z = np.sqrt(projection.C_2d[1, 1])
 
-        return RiskResult(
+        alert = AlertClassifier()
+        
+        result = RiskResult(
             conjunction=event,
             pc=pc,
             combined_covariance=projection.C_2d,
@@ -43,3 +46,6 @@ class RiskCalculator:
             b_plane_sigma_z=sigma_z,
             method=self.pc_calculator.method.value
         )
+        
+        result.warning_level = alert.classify(result)
+        return result

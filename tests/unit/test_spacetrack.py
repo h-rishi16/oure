@@ -1,8 +1,10 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from oure.data.spacetrack import SpaceTrackFetcher
+
 from oure.data.cache import CacheManager
-import httpx
+from oure.data.spacetrack import SpaceTrackFetcher
+
 
 @pytest.fixture
 def cache_manager(tmp_path):
@@ -16,7 +18,7 @@ async def test_spacetrack_fetcher_login_success(mock_client_class, cache_manager
     mock_post_response.text = "successful"
     mock_post_response.raise_for_status = MagicMock()
     mock_client.post.return_value = mock_post_response
-    
+
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
     fetcher = SpaceTrackFetcher(username="test", password="password", cache=cache_manager)
@@ -31,11 +33,11 @@ async def test_spacetrack_fetcher_login_success(mock_client_class, cache_manager
 @patch('httpx.AsyncClient')
 def test_spacetrack_fetcher_fetch_from_network(mock_client_class, cache_manager):
     mock_client = AsyncMock()
-    
+
     mock_post_response = MagicMock()
     mock_post_response.text = "successful"
     mock_client.post.return_value = mock_post_response
-    
+
     mock_get_response = MagicMock()
     mock_get_response.json.return_value = [
         {
@@ -67,12 +69,12 @@ def test_spacetrack_fetcher_fetch_from_network(mock_client_class, cache_manager)
 @patch('httpx.AsyncClient')
 def test_spacetrack_fetcher_cache_logic(mock_client_class, cache_manager):
     fetcher = SpaceTrackFetcher(username="test", password="password", cache=cache_manager)
-    
+
     mock_client = AsyncMock()
     mock_post_response = MagicMock()
     mock_post_response.text = "successful"
     mock_client.post.return_value = mock_post_response
-    
+
     mock_get_response = MagicMock()
     mock_get_response.json.return_value = [
         {
@@ -92,7 +94,7 @@ def test_spacetrack_fetcher_cache_logic(mock_client_class, cache_manager):
     ]
     mock_client.get.return_value = mock_get_response
     mock_client_class.return_value.__aenter__.return_value = mock_client
-    
+
     # 1. First call (network fetch)
     fetcher.fetch(sat_ids=["12345"])
     assert mock_client.get.call_count == 2

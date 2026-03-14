@@ -60,6 +60,9 @@ class TCARefinementEngine:
 
         miss_distance_km = self._range_at(tca_offset, search_start, primary_state, primary_propagator, secondary_state, secondary_propagator)
 
+        if miss_distance_km > 10.0:
+            return None
+
         return tca_epoch, miss_distance_km
 
     def _range_at(

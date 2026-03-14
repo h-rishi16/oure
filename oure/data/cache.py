@@ -10,6 +10,7 @@ import logging
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from contextlib import closing
 
 from oure.core.models import TLERecord
 
@@ -37,54 +38,56 @@ class CacheManager:
         self._init_schema()
 
     def _init_schema(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS cache_entries (
-                    key          TEXT    PRIMARY KEY,
-                    value        TEXT    NOT NULL,
-                    fetched_at   REAL    NOT NULL,
-                    ttl_seconds  REAL    NOT NULL
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS tle_records (
-                    sat_id              TEXT PRIMARY KEY,
-                    name                TEXT,
-                    line1               TEXT NOT NULL,
-                    line2               TEXT NOT NULL,
-                    tle_epoch           TEXT NOT NULL,
-                    fetched_at          TEXT NOT NULL,
-                    inclination_deg     REAL,
-                    raan_deg            REAL,
-                    eccentricity        REAL,
-                    arg_perigee_deg     REAL,
-                    mean_anomaly_deg    REAL,
-                    mean_motion         REAL,
-                    bstar               REAL
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS risk_history (
-                    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-                    primary_id          TEXT NOT NULL,
-                    secondary_id        TEXT NOT NULL,
-                    evaluation_time     TEXT NOT NULL,
-                    tca                 TEXT NOT NULL,
-                    pc                  REAL NOT NULL,
-                    miss_distance_km    REAL NOT NULL,
-                    warning_level       TEXT NOT NULL
-                )
-            """)
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            with conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS cache_entries (
+                        key          TEXT    PRIMARY KEY,
+                        value        TEXT    NOT NULL,
+                        fetched_at   REAL    NOT NULL,
+                        ttl_seconds  REAL    NOT NULL
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS tle_records (
+                        sat_id              TEXT PRIMARY KEY,
+                        name                TEXT,
+                        line1               TEXT NOT NULL,
+                        line2               TEXT NOT NULL,
+                        tle_epoch           TEXT NOT NULL,
+                        fetched_at          TEXT NOT NULL,
+                        inclination_deg     REAL,
+                        raan_deg            REAL,
+                        eccentricity        REAL,
+                        arg_perigee_deg     REAL,
+                        mean_anomaly_deg    REAL,
+                        mean_motion         REAL,
+                        bstar               REAL
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS risk_history (
+                        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                        primary_id          TEXT NOT NULL,
+                        secondary_id        TEXT NOT NULL,
+                        evaluation_time     TEXT NOT NULL,
+                        tca                 TEXT NOT NULL,
+                        pc                  REAL NOT NULL,
+                        miss_distance_km    REAL NOT NULL,
+                        warning_level       TEXT NOT NULL
+                    )
+                """)
 
     def log_risk_event(self, primary_id: str, secondary_id: str, tca: datetime, pc: float, miss_distance_km: float, warning_level: str) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT INTO risk_history (primary_id, secondary_id, evaluation_time, tca, pc, miss_distance_km, warning_level)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (primary_id, secondary_id, datetime.now(UTC).isoformat(), tca.isoformat(), pc, miss_distance_km, warning_level))
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            with conn:
+                conn.execute("""
+                    INSERT INTO risk_history (primary_id, secondary_id, evaluation_time, tca, pc, miss_distance_km, warning_level)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (primary_id, secondary_id, datetime.now(UTC).isoformat(), tca.isoformat(), pc, miss_distance_km, warning_level))
 
-    def get_risk_history(self, primary_id: str, secondary_id: str, limit: int = 100) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
+    def get_risk_history(self, primary_id: str, secondary_id: str, limit: int = 100) -> list[dict[str, object]]:
+        with closing(sqlite3.connect(self.db_path)) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("""
                 SELECT * FROM risk_history 
@@ -95,7 +98,7 @@ class CacheManager:
 
     def get(self, key: str) -> str | None:
         """Return cached value if it exists and hasn't expired."""
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn:
             row = conn.execute(
                 "SELECT value, fetched_at, ttl_seconds FROM cache_entries WHERE key=?",
                 (key,)
@@ -110,27 +113,29 @@ class CacheManager:
         return str(value)
 
     def set(self, key: str, value: str, ttl_seconds: float = 3600.0) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT OR REPLACE INTO cache_entries (key, value, fetched_at, ttl_seconds)
-                VALUES (?, ?, ?, ?)
-            """, (key, value, datetime.now(UTC).timestamp(), ttl_seconds))
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            with conn:
+                conn.execute("""
+                    INSERT OR REPLACE INTO cache_entries (key, value, fetched_at, ttl_seconds)
+                    VALUES (?, ?, ?, ?)
+                """, (key, value, datetime.now(UTC).timestamp(), ttl_seconds))
 
     def cache_tle(self, record: TLERecord) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT OR REPLACE INTO tle_records
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (
-                record.sat_id, record.name, record.line1, record.line2,
-                record.epoch.isoformat(), record.fetched_at.isoformat(),
-                record.inclination_deg, record.raan_deg, record.eccentricity,
-                record.arg_perigee_deg, record.mean_anomaly_deg,
-                record.mean_motion_rev_per_day, record.bstar
-            ))
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            with conn:
+                conn.execute("""
+                    INSERT OR REPLACE INTO tle_records
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """, (
+                    record.sat_id, record.name, record.line1, record.line2,
+                    record.epoch.isoformat(), record.fetched_at.isoformat(),
+                    record.inclination_deg, record.raan_deg, record.eccentricity,
+                    record.arg_perigee_deg, record.mean_anomaly_deg,
+                    record.mean_motion_rev_per_day, record.bstar
+                ))
 
     def get_tle(self, sat_id: str, max_age_hours: float = 48.0) -> TLERecord | None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn:
             row = conn.execute(
                 "SELECT * FROM tle_records WHERE sat_id=?", (sat_id,)
             ).fetchone()

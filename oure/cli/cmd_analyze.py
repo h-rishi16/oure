@@ -8,12 +8,19 @@ import logging
 import sys
 from datetime import UTC
 from pathlib import Path
+from typing import Any
 
 import click
 import numpy as np
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+)
 from rich.table import Table
 
 from oure.conjunction.assessor import ConjunctionAssessor
@@ -22,21 +29,48 @@ from oure.physics.factory import PropagatorFactory
 from oure.risk.calculator import RiskCalculator
 
 from .main import OUREContext, cli
-from typing import Any
 
 console = Console()
 
 def _tle_to_initial_state(tle: Any) -> StateVector:
-    import math
-
     from oure.core import constants
-    n = tle.mean_motion_rev_per_day * 2 * math.pi / constants.SECONDS_PER_DAY
+    import math
+    n = tle.mean_motion_rev_per_day * constants.TWO_PI / constants.SECONDS_PER_DAY
     a = (constants.MU_KM3_S2 / n**2) ** (1.0/3.0) if n > 0 else constants.R_EARTH_KM + 400
-    angle = math.radians(tle.mean_anomaly_deg)
-    r = a * np.array([math.cos(angle), math.sin(angle), 0.0])
-    v_mag = math.sqrt(constants.MU_KM3_S2 / a)
-    v = v_mag * np.array([-math.sin(angle), math.cos(angle), 0.0])
-    return StateVector(r=r, v=v, epoch=tle.epoch, sat_id=tle.sat_id)
+
+    e = tle.eccentricity
+    i = math.radians(tle.inclination_deg)
+    raan = math.radians(tle.raan_deg)
+    omega = math.radians(tle.arg_perigee_deg)
+    M = math.radians(tle.mean_anomaly_deg)
+
+    # Solve Kepler for E
+    E = M
+    for _ in range(10):
+        E = E - (E - e * math.sin(E) - M) / (1 - e * math.cos(E))
+
+    # True anomaly
+    nu = 2 * math.atan2(math.sqrt(1 + e) * math.sin(E / 2), math.sqrt(1 - e) * math.cos(E / 2))
+
+    p = a * (1 - e**2)
+    r_mag = p / (1 + e * math.cos(nu))
+
+    # Perifocal coordinates
+    r_pqw = r_mag * np.array([math.cos(nu), math.sin(nu), 0.0])
+    v_pqw = math.sqrt(constants.MU_KM3_S2 / p) * np.array([-math.sin(nu), e + math.cos(nu), 0.0])
+
+    # Rotation PQW -> ECI
+    c_O, s_O = math.cos(raan), math.sin(raan)
+    c_i, s_i = math.cos(i), math.sin(i)
+    c_w, s_w = math.cos(omega), math.sin(omega)
+
+    R = np.array([
+        [c_O*c_w - s_O*s_w*c_i, -c_O*s_w - s_O*c_w*c_i, s_O*s_i],
+        [s_O*c_w + c_O*s_w*c_i, -s_O*s_w + c_O*c_w*c_i, -c_O*s_i],
+        [s_w*s_i, c_w*s_i, c_i]
+    ])
+
+    return StateVector(r=R @ r_pqw, v=R @ v_pqw, epoch=tle.epoch, sat_id=tle.sat_id)
 
 def _default_covariance(sat_id: str) -> CovarianceMatrix:
     from datetime import datetime

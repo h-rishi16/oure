@@ -73,25 +73,27 @@ class FosterPcCalculator:
 
     def _foster_series(self, b: np.ndarray, C: np.ndarray) -> float:
         eigenvalues, _ = np.linalg.eigh(C)
-        lam1, lam2 = sorted(eigenvalues)
+        lam1, lam2 = sorted(eigenvalues) # lam1=min, lam2=max
         if lam1 <= 0 or lam2 <= 0:
             return 0.0
 
         miss_sq = float(b @ np.linalg.inv(C) @ b)
         u = miss_sq / 2.0
-        v = self.R**2 / (2 * lam1)
+        v = self.R**2 / (2 * sqrt(lam1 * lam2))
 
         pc = 0.0
 
-        # Iteratively calculate the terms to avoid large factorials
-        # The term is (exp(-u) * u**n) / n!
-        log_term = -u
         for n in range(self.series_terms):
-            if n > 0:
-                log_term += np.log(u) - np.log(n)
-
-            weight = np.exp(log_term)
+            # Term: (exp(-u) * u^n / n!) * gammainc(n+1, v)
+            # Using log space for stability
+            if u > 0:
+                from math import lgamma
+                log_weight = -u + n * np.log(u) - lgamma(n + 1)
+                weight = exp(log_weight)
+            else:
+                weight = 1.0 if n == 0 else 0.0
+                
             gamma_term = gammainc(n + 1, v)
             pc += weight * gamma_term
 
-        return float(np.clip(pc * pi * self.R**2 / (2 * pi * sqrt(lam1 * lam2)), 0, 1))
+        return float(np.clip(pc, 0, 1))

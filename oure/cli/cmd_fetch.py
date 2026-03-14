@@ -20,7 +20,7 @@ console = Console()
 def _approx_altitude(mean_motion_rev_day: float) -> float:
     """Quick altitude estimate from mean motion."""
     from oure.core import constants
-    n = mean_motion_rev_day * 2 * constants.TWO_PI / constants.SECONDS_PER_DAY
+    n = mean_motion_rev_day * constants.TWO_PI / constants.SECONDS_PER_DAY
     a = (constants.MU_KM3_S2 / n**2) ** (1/3) if n > 0 else constants.R_EARTH_KM + 400
     return a - constants.R_EARTH_KM
 

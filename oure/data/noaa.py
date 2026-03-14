@@ -48,14 +48,46 @@ class NOAASolarFluxFetcher(BaseDataFetcher):
             return [self._parse_flux(data)]
         return self._fetch_from_network()
 
-    def _fetch_from_network(self, **kwargs: Any) -> list[Any]:
-        resp = requests.get(self.FLUX_URL, timeout=20)
-        resp.raise_for_status()
-        data = resp.json()
-        self.cache.set("noaa_f107_current", json.dumps(data), ttl_seconds=3600)
-        result = self._parse_flux(data)
-        logger.info(f"Solar flux F10.7={result.f10_7} fetched from NOAA")
-        return [result]
+    def _fetch_from_network(self, **kwargs: Any) -> list[SolarFluxData]:
+        try:
+            resp = requests.get(self.FLUX_URL, timeout=20)
+            resp.raise_for_status()
+            data = resp.json()
+            self.cache.set("noaa_f107_current", json.dumps(data), ttl_seconds=3600)
+            result = self._parse_flux(data)
+
+            f10_7_81day_avg = result.f10_7
+            ap_index = 15.0
+
+            # Attempt to fetch archive data for 81-day avg and Ap
+            try:
+                arch_resp = requests.get(self.FLUX_ARCHIVE_URL, timeout=20)
+                arch_resp.raise_for_status()
+                arch_data = arch_resp.json()
+                if arch_data:
+                    latest = arch_data[-1]
+                    f10_7_81day_avg = float(latest.get("f107_81day_avg", result.f10_7))
+                    ap_index = float(latest.get("ap_index", 15.0))
+            except Exception as e:
+                logger.warning(f"Failed to fetch NOAA archive data: {e}. Using defaults.")
+
+            final_result = SolarFluxData(
+                date=result.date,
+                f10_7=result.f10_7,
+                f10_7_81day_avg=f10_7_81day_avg,
+                ap_index=ap_index
+            )
+
+            logger.info(f"Solar flux F10.7={final_result.f10_7} fetched from NOAA")
+            return [final_result]
+        except Exception as e:
+            logger.warning(f"NOAA network fetch failed: {e}. Using default solar mean.")
+            return [SolarFluxData(
+                date=datetime.now(UTC),
+                f10_7=150.0,
+                f10_7_81day_avg=150.0,
+                ap_index=15.0
+            )]
 
     def _parse_flux(self, data: dict[str, Any]) -> SolarFluxData:
         # NOAA JSON format: {"Flux": "175", "TimeStamp": "2024-01-15 12:00:00"}

@@ -3,16 +3,21 @@ OURE Risk Calculation - Interactive B-Plane Plotter
 ===================================================
 """
 
+from pathlib import Path
+
 import numpy as np
 import plotly.graph_objects as go
-from pathlib import Path
+
+from typing import Any
+
 from oure.core.models import ConjunctionEvent
+
 
 class RiskPlotter:
     """Generates interactive HTML plots for conjunction events."""
 
     @staticmethod
-    def create_bplane_figure(event_data: dict) -> go.Figure:
+    def create_bplane_figure(event_data: dict[str, Any]) -> go.Figure:
         """
         Creates a 2D B-Plane cross-section Plotly figure.
         """
@@ -22,9 +27,9 @@ class RiskPlotter:
         pc = event_data.get("pc", 0.0)
         primary_id = event_data.get("primary_id", "Primary")
         secondary_id = event_data.get("secondary_id", "Secondary")
-        
+
         fig = go.Figure()
-        
+
         # Primary satellite at the origin with its Hard Body Radius (Collision Disk)
         fig.add_shape(type="circle",
             xref="x", yref="y",
@@ -36,28 +41,28 @@ class RiskPlotter:
         fig.add_trace(go.Scatter(x=[None], y=[None], mode='markers',
                                  marker=dict(size=15, color="rgba(255, 0, 0, 0.5)", line=dict(color="red", width=2)),
                                  name="Collision Disk (HBR)"))
-        
+
         # Secondary satellite assumed at (miss_dist, 0) in this simplified projection
         t = np.linspace(0, 2*np.pi, 100)
         colors = ['rgba(0, 0, 255, 0.8)', 'rgba(0, 0, 255, 0.5)', 'rgba(0, 0, 255, 0.2)']
-        
+
         for idx, n_sig in enumerate([1, 2, 3]):
             x = miss_dist + n_sig * sigma_x * np.cos(t)
             y = n_sig * sigma_z * np.sin(t)
-            fig.add_trace(go.Scatter(x=x, y=y, mode='lines', 
-                                     name=f'{n_sig}σ Ellipse', 
+            fig.add_trace(go.Scatter(x=x, y=y, mode='lines',
+                                     name=f'{n_sig}σ Ellipse',
                                      line=dict(color=colors[idx], dash='dash')))
-            
-        fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', 
-                                 marker=dict(color='black', size=8, symbol='cross'), 
+
+        fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers',
+                                 marker=dict(color='black', size=8, symbol='cross'),
                                  name=f'{primary_id} Center'))
-        fig.add_trace(go.Scatter(x=[miss_dist], y=[0], mode='markers', 
-                                 marker=dict(color='blue', size=8, symbol='x'), 
+        fig.add_trace(go.Scatter(x=[miss_dist], y=[0], mode='markers',
+                                 marker=dict(color='blue', size=8, symbol='x'),
                                  name=f'{secondary_id} Mean'))
-        
+
         # Format the axes to have an equal aspect ratio so circles look like circles
         axis_range = max(miss_dist + 3*sigma_x, 3*sigma_z) * 1.1
-        
+
         fig.update_layout(
             title=f"B-Plane Encounter: {primary_id} vs {secondary_id}<br>Probability of Collision (Pc) = {pc:.2e}",
             xaxis_title="B-Plane ξ (km)",
@@ -72,7 +77,7 @@ class RiskPlotter:
         return fig
 
     @staticmethod
-    def plot_bplane_from_json(event_data: dict, output_path: Path):
+    def plot_bplane_from_json(event_data: dict[str, Any], output_path: Path) -> None:
         fig = RiskPlotter.create_bplane_figure(event_data)
         fig.write_html(str(output_path))
 
@@ -86,16 +91,16 @@ class RiskPlotter:
         v_p = event.primary_state.v
         r_s = event.secondary_state.r
         v_s = event.secondary_state.v
-        
+
         # Create a time array from -30 seconds to +30 seconds around TCA
         t_offsets = np.linspace(-30, 30, 60)
-        
+
         # Linearly project positions (sufficiently accurate for a 60-second window in LEO)
         traj_p = r_p + np.outer(t_offsets, v_p)
         traj_s = r_s + np.outer(t_offsets, v_s)
-        
+
         fig = go.Figure()
-        
+
         # Primary Trajectory
         fig.add_trace(go.Scatter3d(
             x=traj_p[:, 0], y=traj_p[:, 1], z=traj_p[:, 2],
@@ -108,7 +113,7 @@ class RiskPlotter:
             mode='markers', marker=dict(size=8, color='darkblue'),
             name=f'{event.primary_id} at TCA'
         ))
-        
+
         # Secondary Trajectory
         fig.add_trace(go.Scatter3d(
             x=traj_s[:, 0], y=traj_s[:, 1], z=traj_s[:, 2],
@@ -121,7 +126,7 @@ class RiskPlotter:
             mode='markers', marker=dict(size=8, color='darkred'),
             name=f'{event.secondary_id} at TCA'
         ))
-        
+
         # Draw a line representing the miss distance vector
         fig.add_trace(go.Scatter3d(
             x=[r_p[0], r_s[0]], y=[r_p[1], r_s[1]], z=[r_p[2], r_s[2]],
@@ -140,5 +145,5 @@ class RiskPlotter:
             margin=dict(l=0, r=0, b=0, t=30),
             legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
         )
-        
+
         return fig
