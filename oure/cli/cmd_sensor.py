@@ -3,13 +3,11 @@ OURE CLI - Task Sensor Command (Kalman Filter Update)
 =====================================================
 """
 
-import logging
 import sys
 from datetime import timedelta
 
 import click
 import numpy as np
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
@@ -18,10 +16,9 @@ from oure.physics.numerical import NumericalPropagator
 from oure.risk.calculator import RiskCalculator
 from oure.uncertainty.sensor import SensorTaskingSimulator
 
-from .cmd_analyze import _default_covariance, _tle_to_initial_state
 from .main import OUREContext, cli
+from .utils import UI, _default_covariance, _tle_to_initial_state, console
 
-console = Console()
 
 @cli.command()
 @click.option("--primary", "-p", required=True, help="NORAD ID of the primary satellite.")
@@ -33,22 +30,20 @@ def task_sensor(ctx: click.Context, primary: str, secondary: str, sensor_noise_m
     Simulate purchasing a new radar observation to reduce uncertainty and update Pc.
     """
     oure_ctx: OUREContext = ctx.obj
-    log = logging.getLogger("oure.cli.task_sensor")
+    UI.header("Sensor Tasking Simulator", "Collapsing covariance via commercial radar updates")
 
-    records = {r.sat_id: r for r in oure_ctx.tle_fetcher.fetch(sat_ids=[primary, secondary])}
-    flux = oure_ctx.flux_fetcher.get_current_f107()
+    with console.status("[bold cyan]Fetching current orbital data...") as status:
+        records = {r.sat_id: r for r in oure_ctx.tle_fetcher.fetch(sat_ids=[primary, secondary])}
+        flux = oure_ctx.flux_fetcher.get_current_f107()
 
     if primary not in records or secondary not in records:
-        console.print("[bold red]✗ Failed to fetch both satellites.[/bold red]")
+        UI.error(f"Satellite data missing for {primary} or {secondary}.")
         sys.exit(1)
 
     p_state = _tle_to_initial_state(records[primary])
     s_state = _tle_to_initial_state(records[secondary])
 
-    # We simulate a "stale" covariance for the secondary to show the massive improvement
     p_cov = _default_covariance(primary)
-
-    # Stale covariance (e.g. 5km position uncertainty)
     s_cov_stale = _default_covariance(secondary)
     s_cov_stale.matrix[:3, :3] = np.eye(3) * 25.0 # 25 km^2 = 5km sigma
 
@@ -57,48 +52,49 @@ def task_sensor(ctx: click.Context, primary: str, secondary: str, sensor_noise_m
 
     search_start = p_state.epoch
     search_end = search_start + timedelta(hours=72)
-    tca_result = tca_finder.find_tca(p_state, base_prop, s_state, base_prop, search_start, search_end)
+
+    with console.status("[bold cyan]Locating TCA...") as status:
+        tca_result = tca_finder.find_tca(p_state, base_prop, s_state, base_prop, search_start, search_end)
 
     if not tca_result:
-        console.print("[bold green]No collision detected in look-ahead window.[/bold green]")
+        UI.success("No collision detected in look-ahead window.")
         return
 
     tca, miss = tca_result
     p_tca = base_prop.propagate_to(p_state, tca)
     s_tca = base_prop.propagate_to(s_state, tca)
-    v_rel = np.linalg.norm(p_tca.v - s_tca.v)
+    v_rel = float(np.linalg.norm(p_tca.v - s_tca.v))
 
     risk_calc = RiskCalculator()
 
     # 1. Baseline Risk (with Stale Covariance)
-    event_baseline = type('Event', (), {
-        'primary_id': primary, 'secondary_id': secondary, 'tca': tca,
-        'miss_distance_km': miss, 'relative_velocity_km_s': v_rel,
-        'primary_state': p_tca, 'secondary_state': s_tca,
-        'primary_covariance': p_cov, 'secondary_covariance': s_cov_stale
-    })()
-
+    from oure.core.models import ConjunctionEvent
+    event_baseline = ConjunctionEvent(
+        primary_id=primary, secondary_id=secondary, tca=tca,
+        miss_distance_km=miss, relative_velocity_km_s=v_rel,
+        primary_state=p_tca, secondary_state=s_tca,
+        primary_covariance=p_cov, secondary_covariance=s_cov_stale
+    )
     baseline_risk = risk_calc.compute_pc(event_baseline)
 
     # 2. Simulate Sensor Update via Kalman Filter
     simulator = SensorTaskingSimulator(sensor_noise_m=sensor_noise_m)
     s_cov_updated = simulator.simulate_radar_update(s_cov_stale)
 
-    event_updated = type('Event', (), {
-        'primary_id': primary, 'secondary_id': secondary, 'tca': tca,
-        'miss_distance_km': miss, 'relative_velocity_km_s': v_rel,
-        'primary_state': p_tca, 'secondary_state': s_tca,
-        'primary_covariance': p_cov, 'secondary_covariance': s_cov_updated
-    })()
-
+    event_updated = ConjunctionEvent(
+        primary_id=primary, secondary_id=secondary, tca=tca,
+        miss_distance_km=miss, relative_velocity_km_s=v_rel,
+        primary_state=p_tca, secondary_state=s_tca,
+        primary_covariance=p_cov, secondary_covariance=s_cov_updated
+    )
     updated_risk = risk_calc.compute_pc(event_updated)
 
-    console.print(Panel(f"Simulating Commercial Radar Tasking against {secondary} (Accuracy: {sensor_noise_m}m)", style="cyan"))
+    console.print(Panel(f"Simulating Commercial Radar Tasking against [highlight]{secondary}[/highlight] (Accuracy: {sensor_noise_m}m)", border_style="cyan"))
 
-    table = Table(title="Covariance & Risk Update (EKF)")
-    table.add_column("Metric", style="blue")
-    table.add_column("Before Radar Track (Stale TLE)", style="red")
-    table.add_column("After Radar Track", style="green")
+    table = Table(title="Covariance & Risk Update (EKF)", box=None)
+    table.add_column("Metric", style="info")
+    table.add_column("Before Radar Track", style="danger", justify="right")
+    table.add_column("After Radar Track", style="success", justify="right")
 
     table.add_row(
         "Pos. Uncertainty (Trace)",
@@ -115,15 +111,20 @@ def task_sensor(ctx: click.Context, primary: str, secondary: str, sensor_noise_m
         f"{baseline_risk.pc:.2e}",
         f"{updated_risk.pc:.2e}"
     )
+    # Map warning levels to theme styles
+    style_map = {"RED": "danger", "YELLOW": "warning", "GREEN": "success"}
+    b_style = style_map.get(baseline_risk.warning_level, "white")
+    u_style = style_map.get(updated_risk.warning_level, "white")
+
     table.add_row(
         "Alert Level",
-        f"{baseline_risk.warning_level}",
-        f"{updated_risk.warning_level}"
+        f"[{b_style}]{baseline_risk.warning_level}[/]",
+        f"[{u_style}]{updated_risk.warning_level}[/]"
     )
 
     console.print(table)
 
     if updated_risk.warning_level != baseline_risk.warning_level:
-        console.print(f"\n[bold green]✓ Radar tasking successfully downgraded risk to {updated_risk.warning_level}. Maneuver aborted.[/bold green]")
+        UI.success(f"Radar tasking successfully downgraded risk to [bold]{updated_risk.warning_level}[/bold]. Maneuver aborted.")
     else:
-        console.print("\n[bold yellow]⚠ Radar tasking did not change the alert tier. Proceed to maneuver analysis.[/bold yellow]")
+        console.print(f"\n[warning]WARNING: Radar tasking did not change the alert tier. Alert remains {updated_risk.warning_level}. Proceed to maneuver analysis.[/warning]")

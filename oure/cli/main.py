@@ -8,6 +8,9 @@ import sys
 from pathlib import Path
 
 import click
+import click_completion
+
+click_completion.init()
 
 from oure.data.cache import CacheManager
 from oure.data.noaa import NOAASolarFluxFetcher
@@ -58,8 +61,8 @@ class OUREContext:
 def cli(ctx: click.Context, st_username: str, st_password: str, db_path: str | None, verbose: bool, log_file: str | None) -> None:
     """
     ╔══════════════════════════════════════════════╗
-    ║   OURE — Orbital Uncertainty & Risk Engine   ║
-    ║   Satellite Collision Probability Solver     ║
+    ║   OURE --- Orbital Uncertainty & Risk Engine   ║
+    ║    Satellite Collision Probability Solver    ║
     ╚══════════════════════════════════════════════╝
     """
     setup_logging(verbose, log_file)
@@ -70,6 +73,15 @@ def cli(ctx: click.Context, st_username: str, st_password: str, db_path: str | N
         db_path=Path(db_path) if db_path else None,
         verbose=verbose
     )
+
+@cli.command()
+@click.option('--append/--overwrite', help="Append the completion script to your shell profile or overwrite it.", default=None)
+@click.argument('shell', required=False, type=click_completion.DocumentedChoice(click_completion.core.shells))
+def install_completion(append: bool | None, shell: str | None) -> None:
+    """Install the shell completion script for your current shell."""
+    shell, path = click_completion.core.install(shell=shell, append=append)
+    from .utils import console
+    console.print(f'[success]DONE[/success] [info]{shell}[/info] completion installed in [info]{path}[/info]')
 
 # Import commands to register them with the CLI group
 from . import (

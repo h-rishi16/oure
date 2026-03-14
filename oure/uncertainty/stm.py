@@ -32,19 +32,16 @@ class STMCalculator:
         elif self.fidelity == 1:
             return self._j2_linearised_stm(state, dt_seconds)
         else:
-            # This case requires a propagator, which is not handled here yet.
-            # This will be part of a future refactoring.
-            raise NotImplementedError("Numerical STM is not yet implemented in this refactored structure.")
+            return self._numerical_stm(state, dt_seconds)
 
     def _two_body_stm(self, state: StateVector, dt: float) -> np.ndarray:
         r = state.r
         r_mag = np.linalg.norm(r)
-        n = np.sqrt(constants.MU_KM3_S2 / r_mag**3)
-        G = constants.MU_KM3_S2 / r_mag**3 * (3 * np.outer(r, r) / r_mag**2 - np.eye(3))
-        A = np.zeros((6, 6))
-        A[:3, 3:] = np.eye(3)
-        A[3:, :3] = G
-        return expm(A * dt)  # type: ignore
+        g_matrix = constants.MU_KM3_S2 / r_mag**3 * (3 * np.outer(r, r) / r_mag**2 - np.eye(3))
+        a_matrix = np.zeros((6, 6))
+        a_matrix[:3, 3:] = np.eye(3)
+        a_matrix[3:, :3] = g_matrix
+        return expm(a_matrix * dt)  # type: ignore
 
     def _j2_linearised_stm(self, state: StateVector, dt: float) -> np.ndarray:
         r = state.r
@@ -52,20 +49,56 @@ class STMCalculator:
         r_hat = r / r_mag
         z_r = r_hat[2]
 
-        coeff = -3/2 * constants.J2 * constants.MU_KM3_S2 * constants.R_EARTH_KM**2 / r_mag**4
-        delta_G = np.zeros((3, 3))
+        coeff = -1.5 * constants.J2 * constants.MU_KM3_S2 * constants.R_EARTH_KM**2 / r_mag**5
+        delta_g = np.zeros((3, 3))
         for i in range(3):
             for j in range(3):
                 dij = 1.0 if i == j else 0.0
-                delta_G[i, j] = coeff * (
-                    (1 - 5*z_r**2) * dij / r_mag
-                    - (1 - 5*z_r**2) * r_hat[i]*r_hat[j] / r_mag
-                    - 10*z_r * r_hat[i]*(1.0 if j == 2 else 0.0) / r_mag
-                    + 35*z_r**2 * r_hat[i]*r_hat[j] / r_mag
+                delta_g[i, j] = coeff * (
+                    (1 - 5 * z_r**2) * dij
+                    - (1 - 5 * z_r**2) * r_hat[i] * r_hat[j]
+                    - 10 * z_r * r_hat[i] * (1.0 if j == 2 else 0.0)
+                    + 35 * z_r**2 * r_hat[i] * r_hat[j]
                 )
 
-        G_2body = constants.MU_KM3_S2 / r_mag**3 * (3 * np.outer(r, r) / r_mag**2 - np.eye(3))
-        A = np.zeros((6, 6))
-        A[:3, 3:] = np.eye(3)
-        A[3:, :3] = G_2body + delta_G
-        return expm(A * dt)  # type: ignore
+        g_2body = (
+            constants.MU_KM3_S2
+            / r_mag**3
+            * (3 * np.outer(r, r) / r_mag**2 - np.eye(3))
+        )
+        a_matrix = np.zeros((6, 6))
+        a_matrix[:3, 3:] = np.eye(3)
+        a_matrix[3:, :3] = g_2body + delta_g
+        return expm(a_matrix * dt)  # type: ignore
+
+    def _numerical_stm(self, state: StateVector, dt: float) -> np.ndarray:
+        """
+        Computes the STM via centered finite differences of the dynamics.
+        Uses a high-fidelity numerical propagator.
+        """
+        from oure.physics.numerical import NumericalPropagator
+
+        prop = NumericalPropagator()
+
+        epsilon = 1e-4  # Perturbation size in km and km/s
+        stm = np.zeros((6, 6))
+
+        x0 = state.state_vector_6d
+
+        # We perturb each element of the initial state and see how the final state changes
+        for i in range(6):
+            x_plus = x0.copy()
+            x_minus = x0.copy()
+            x_plus[i] += epsilon
+            x_minus[i] -= epsilon
+
+            s_plus = StateVector.from_6d(x_plus, state.epoch, state.sat_id)
+            s_minus = StateVector.from_6d(x_minus, state.epoch, state.sat_id)
+
+            y_plus = prop.propagate(s_plus, dt).state_vector_6d
+            y_minus = prop.propagate(s_minus, dt).state_vector_6d
+
+            # Central difference: dY/dx_i
+            stm[:, i] = (y_plus - y_minus) / (2 * epsilon)
+
+        return stm

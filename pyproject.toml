@@ -4,13 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "oure-risk-engine"
-version = "1.0.0"
+version = "1.1.0"
 description = "Orbital Uncertainty & Risk Engine --- Satellite Collision Probability Solver"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 dependencies = [
     "click>=8.1",
+    "click-completion>=0.5",
     "numpy>=1.26",
     "scipy>=1.12",
     "sgp4>=2.22",
@@ -21,12 +22,13 @@ dependencies = [
     "tenacity>=8.2",
     "httpx>=0.27",
     "fpdf2>=2.7",
+    "plotly>=5.18",
+    "pandas>=2.1",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-cov", "pytest-asyncio", "hypothesis", "ruff", "mypy", "pre-commit", "faker"]
-vis = ["matplotlib>=3.8", "plotly>=5.18"]
-web = ["fastapi>=0.100", "uvicorn>=0.20", "streamlit>=1.30", "python-multipart>=0.0.9", "pandas", "celery>=5.3", "redis>=5.0"]
+dev = ["pytest>=8", "pytest-cov", "pytest-asyncio", "hypothesis", "ruff", "mypy", "pre-commit", "faker", "scipy-stubs", "pandas-stubs"]
+web = ["fastapi>=0.100", "uvicorn>=0.20", "streamlit>=1.30", "python-multipart>=0.0.9", "celery>=5.3", "redis>=5.0"]
 
 [project.scripts]
 oure = "oure.cli.main:cli"
@@ -51,7 +53,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-omit = ["*/oure/cli/*", "*/tests/*"]
+omit = ["*/tests/*"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["oure"]

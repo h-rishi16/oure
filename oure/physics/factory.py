@@ -7,10 +7,9 @@ from __future__ import annotations
 
 import logging
 
-from oure.core import constants
+from oure.core.constants import SOLAR_FLUX_MEAN_SFU
 from oure.core.models import TLERecord
 
-from oure.core.constants import SOLAR_FLUX_MEAN_SFU
 from .base import BasePropagator
 from .drag_corrector import AtmosphericDragCorrector
 from .j2_corrector import J2PerturbationCorrector

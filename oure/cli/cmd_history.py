@@ -4,17 +4,15 @@ OURE CLI - History Command (Risk Evolution)
 """
 
 import sys
-from typing import Any, cast
 from pathlib import Path
+from typing import Any, cast
 
 import click
 import plotly.graph_objects as go
-from rich.console import Console
 from rich.table import Table
 
-from .main import cli, OUREContext
-
-console = Console()
+from .main import OUREContext, cli
+from .utils import UI, console
 
 @cli.command()
 @click.option("--primary", "-p", required=True, help="NORAD ID of the primary satellite.")
@@ -26,45 +24,43 @@ def history(ctx: click.Context, primary: str, secondary: str, output: str) -> No
     Plot the historical evolution of collision risk (Pc) for a specific conjunction pair.
     """
     oure_ctx: OUREContext = ctx.obj
+    UI.header("Risk History Engine", f"Tracking Pc evolution for {primary} vs {secondary}")
 
     records = oure_ctx.cache.get_risk_history(primary, secondary)
 
     if not records:
-        console.print(f"[yellow]No historical risk data found in the database for {primary} vs {secondary}.[/yellow]")
-        console.print("[dim]Run `oure monitor` first to populate the history database.[/dim]")
-        sys.exit(0)
+        UI.error(f"No historical risk data found for {primary} vs {secondary}.", "Run `oure monitor` first to populate the history database.")
+        return
 
-    console.print(f"[cyan]Found {len(records)} historical risk evaluations for {primary} vs {secondary}.[/cyan]")
+    UI.success(f"Retrieved {len(records)} historical risk evaluations.")
 
-    table = Table(title="Recent Risk Evaluations")
-    table.add_column("Evaluation Time", style="blue")
-    table.add_column("TCA", style="green")
-    table.add_column("Miss (km)", justify="right")
-    table.add_column("Pc", justify="right", style="bold")
+    table = Table(title="Recent Risk Evaluations", box=None)
+    table.add_column("Evaluation Time (UTC)", style="info")
+    table.add_column("TCA (UTC)", style="success")
+    table.add_column("Miss (km)", justify="right", style="highlight")
+    table.add_column("Pc", justify="right")
     table.add_column("Level", justify="center")
 
     eval_times = []
     pcs = []
-    miss_dists = []
-    levels = []
+    
+    style_map = {"RED": "danger", "YELLOW": "warning", "GREEN": "success"}
 
     for r_raw in records[-10:]: # Print last 10
-        r = cast(dict[str, Any], r_raw)
-        color = "green" if r['warning_level'] == "GREEN" else ("yellow" if r['warning_level'] == "YELLOW" else "red")
+        r = cast("dict[str, Any]", r_raw)
+        style = style_map.get(r['warning_level'], "white")
         table.add_row(
             str(r['evaluation_time'])[:19].replace("T", " "),
             str(r['tca'])[:19].replace("T", " "),
             f"{r['miss_distance_km']:.3f}",
-            f"[{color}]{r['pc']:.2e}[/{color}]",
-            f"[{color}]{r['warning_level']}[/{color}]"
+            f"[{style}]{r['pc']:.2e}[/{style}]",
+            f"[{style}]{r['warning_level']}[/{style}]"
         )
 
     for r_raw in records:
-        r = cast(dict[str, Any], r_raw)
+        r = cast("dict[str, Any]", r_raw)
         eval_times.append(r['evaluation_time'])
         pcs.append(r['pc'])
-        miss_dists.append(r['miss_distance_km'])
-        levels.append(r['warning_level'])
 
     console.print(table)
 
@@ -98,4 +94,4 @@ def history(ctx: click.Context, primary: str, secondary: str, output: str) -> No
 
     out_path = Path(output)
     fig.write_html(str(out_path))
-    console.print(f"\n[bold green]✓ Interactive Risk Evolution plot saved to {out_path.absolute()}[/bold green]")
+    UI.success(f"Interactive Risk Evolution plot saved to: {out_path.absolute()}")

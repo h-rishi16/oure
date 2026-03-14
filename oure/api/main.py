@@ -67,22 +67,25 @@ async def analyze_cdm(file: UploadFile = File(...), hard_body_radius: float = 20
             contents = await file.read()
             temp_file.write(contents)
             temp_path = temp_file.name
-        # Parse and calculate
-        event = CDMParser.parse_json(temp_path)
-        calc = RiskCalculator(hard_body_radius_m=hard_body_radius)
-        result = calc.compute_pc(event)
 
-        # Cleanup
-        os.unlink(temp_path)
+        try:
+            # Parse and calculate
+            event = CDMParser.parse_json(temp_path)
+            calc = RiskCalculator(hard_body_radius_m=hard_body_radius)
+            result = calc.compute_pc(event)
 
-        return RiskResponse(
-            primary_id=result.conjunction.primary_id,
-            secondary_id=result.conjunction.secondary_id,
-            tca=result.conjunction.tca.isoformat(),
-            pc=result.pc,
-            warning_level=result.warning_level,
-            miss_distance_km=result.conjunction.miss_distance_km,
-            rel_velocity_km_s=result.conjunction.relative_velocity_km_s
-        )
+            return RiskResponse(
+                primary_id=result.conjunction.primary_id,
+                secondary_id=result.conjunction.secondary_id,
+                tca=result.conjunction.tca.isoformat(),
+                pc=result.pc,
+                warning_level=result.warning_level,
+                miss_distance_km=result.conjunction.miss_distance_km,
+                rel_velocity_km_s=result.conjunction.relative_velocity_km_s
+            )
+        finally:
+            # Cleanup ALWAYS
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing CDM: {str(e)}")

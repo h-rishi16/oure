@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
-from contextlib import closing
 
 from oure.core.models import TLERecord
 
@@ -38,9 +38,8 @@ class CacheManager:
         self._init_schema()
 
     def _init_schema(self) -> None:
-        with closing(sqlite3.connect(self.db_path)) as conn:
-            with conn:
-                conn.execute("""
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
+            conn.execute("""
                     CREATE TABLE IF NOT EXISTS cache_entries (
                         key          TEXT    PRIMARY KEY,
                         value        TEXT    NOT NULL,
@@ -48,7 +47,7 @@ class CacheManager:
                         ttl_seconds  REAL    NOT NULL
                     )
                 """)
-                conn.execute("""
+            conn.execute("""
                     CREATE TABLE IF NOT EXISTS tle_records (
                         sat_id              TEXT PRIMARY KEY,
                         name                TEXT,
@@ -65,7 +64,7 @@ class CacheManager:
                         bstar               REAL
                     )
                 """)
-                conn.execute("""
+            conn.execute("""
                     CREATE TABLE IF NOT EXISTS risk_history (
                         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
                         primary_id          TEXT NOT NULL,
@@ -121,18 +120,17 @@ class CacheManager:
                 """, (key, value, datetime.now(UTC).timestamp(), ttl_seconds))
 
     def cache_tle(self, record: TLERecord) -> None:
-        with closing(sqlite3.connect(self.db_path)) as conn:
-            with conn:
-                conn.execute("""
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
+            conn.execute("""
                     INSERT OR REPLACE INTO tle_records
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, (
-                    record.sat_id, record.name, record.line1, record.line2,
-                    record.epoch.isoformat(), record.fetched_at.isoformat(),
-                    record.inclination_deg, record.raan_deg, record.eccentricity,
-                    record.arg_perigee_deg, record.mean_anomaly_deg,
-                    record.mean_motion_rev_per_day, record.bstar
-                ))
+                record.sat_id, record.name, record.line1, record.line2,
+                record.epoch.isoformat(), record.fetched_at.isoformat(),
+                record.inclination_deg, record.raan_deg, record.eccentricity,
+                record.arg_perigee_deg, record.mean_anomaly_deg,
+                record.mean_motion_rev_per_day, record.bstar
+            ))
 
     def get_tle(self, sat_id: str, max_age_hours: float = 48.0) -> TLERecord | None:
         with closing(sqlite3.connect(self.db_path)) as conn:
@@ -152,3 +150,20 @@ class CacheManager:
             arg_perigee_deg=row[9], mean_anomaly_deg=row[10],
             mean_motion_rev_per_day=row[11], bstar=row[12]
         )
+
+    def get_all_tles(self) -> list[TLERecord]:
+        with closing(sqlite3.connect(self.db_path)) as conn:
+            cursor = conn.execute("SELECT * FROM tle_records")
+            rows = cursor.fetchall()
+
+        records = []
+        for row in rows:
+            records.append(TLERecord(
+                sat_id=row[0], name=row[1], line1=row[2], line2=row[3],
+                epoch=datetime.fromisoformat(row[4]),
+                fetched_at=datetime.fromisoformat(row[5]),
+                inclination_deg=row[6], raan_deg=row[7], eccentricity=row[8],
+                arg_perigee_deg=row[9], mean_anomaly_deg=row[10],
+                mean_motion_rev_per_day=row[11], bstar=row[12]
+            ))
+        return records

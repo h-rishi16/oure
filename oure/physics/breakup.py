@@ -59,7 +59,7 @@ class BreakupModel:
         # Use v_rel to scale the mean dispersion speed
         # Fragments from hypervelocity impacts typically have mean dV proportional to v_impact^0.5
         v_impact = float(v_rel)
-        mu_log_dv = np.log(0.02 * np.sqrt(v_impact)) 
+        mu_log_dv = np.log(0.02 * np.sqrt(v_impact))
         sigma_log_dv = 0.55 # NASA SBM standard variance for log10(dv)
 
         dv_magnitudes = rng.lognormal(mean=mu_log_dv, sigma=sigma_log_dv, size=num_fragments) # km/s

@@ -6,7 +6,7 @@ OURE Physics Engine - High Precision Orbit Propagator (HPOP)
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any, cast
+from typing import cast
 
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -181,10 +181,10 @@ class NumericalPropagator(BasePropagator):
             fun=self._dynamics_vectorized,
             t_span=[0, dt_seconds],
             y0=y0,
-            method='RK45',
-            rtol=1e-6, # slightly looser for speed on large N
-            atol=1e-6
+            method="RK45",
+            rtol=1e-8,
+            atol=1e-8,
         )
 
         y_final = sol.y[:, -1]
-        return cast(np.ndarray, y_final.reshape(-1, 6))
+        return cast('np.ndarray', y_final.reshape(-1, 6))

@@ -1,40 +1,39 @@
 # OURE (Orbital Uncertainty & Risk Engine)
 
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
-![Coverage](https://img.shields.io/badge/coverage-81%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-OURE is a high-performance, command-line Space Situational Awareness (SSA) tool designed to predict orbital conjunctions and quantify collision risks ($P_c$) between satellites in Low Earth Orbit (LEO).
+OURE is a high-performance, enterprise-grade Space Situational Awareness (SSA) platform designed for orbital risk prediction, collision avoidance optimization, and fragmentation modeling.
 
-Built for speed and rigorous mathematical accuracy, OURE processes Two-Line Element (TLE) sets, propagates uncertainty using highly optimized vectorized Monte Carlo simulations, and evaluates the Probability of Collision using Foster's algorithm on the encounter B-plane.
+Built for mission-critical speed and mathematical rigor, OURE processes Two-Line Element (TLE) sets, propagates uncertainty using vectorized Monte Carlo simulations, and evaluates Probability of Collision ($P_c$) using Foster's algorithm on the encounter B-plane.
 
-## Features
+## Key Features
 
-- **Vectorized Physics Engine:** Blazing fast SGP4 orbit propagation with J2 (Earth oblateness) and Atmospheric Drag (NRL MSISE proxy via NOAA F10.7 flux) perturbations, utilizing pure NumPy arrays.
-- **Monte Carlo Uncertainty:** Propagates 1,000+ "ghost" trajectories in seconds to generate highly accurate covariance matrices without relying on linear assumptions.
-- **KD-Tree Spatial Indexing:** $O(N \log N)$ screening of large satellite catalogs to quickly filter potential conjunction events.
-- **Foster's Algorithm:** B-plane projection and 2D numerical integration/series expansion to calculate accurate probabilities of collision.
-- **Rich CLI & PDF Reports:** A beautiful terminal interface built with `Click` and `Rich`, complete with automated PDF report generation via `fpdf2`.
-- **Local SQLite Caching:** Built-in rate-limiting protection with local caching of Space-Track and NOAA data.
+- **Multi-Fidelity Physics Engine:** Native SGP4 propagation combined with a High Precision Orbit Propagator (HPOP) featuring J2 oblateness and atmospheric drag perturbations.
+- **Collision Avoidance (SLSQP):** Mathematical maneuver optimization to find minimum-fuel 3D Delta-V vectors that mitigate collision risk below safety thresholds.
+- **NASA Standard Breakup Model:** Simulation of hypervelocity impacts and debris cloud dispersion.
+- **Sensor Fusion:** Extended Kalman Filter (EKF) updates to simulate commercial radar tasking and covariance collapse.
+- **KD-Tree Fleet Screening:** Distributed $O(N \log N)$ screening of entire satellite constellations against the full NORAD catalog.
+- **Interactive Visualizations:** 3D ECI encounter geometry and 2D B-Plane cross-sections using Plotly.
+- **Distributed Architecture:** FastAPI REST API and Celery/Redis background worker support for large-scale operations.
 
 ## Installation
 
 OURE requires Python 3.11 or higher.
 
-1. Clone the repository and navigate to the directory:
+1. Clone the repository:
    ```bash
    git clone https://github.com/yourusername/oure.git
    cd oure
    ```
 
-2. Create a virtual environment and install the package with developer and visualization extras:
+2. Setup virtual environment and install:
    ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -e '.[dev,vis]'
+   make install
    ```
 
-3. Set up your Space-Track.org credentials. Create a `keys.env` file in the project root:
+3. Configure credentials in `keys.env`:
    ```env
    SPACETRACK_USER=your_email@example.com
    SPACETRACK_PASS=your_password
@@ -42,44 +41,54 @@ OURE requires Python 3.11 or higher.
 
 ## Usage
 
-Load your credentials into your environment, then run the CLI:
-
+### 1. Analyze a Conjunction
 ```bash
-source keys.env
+oure analyze --primary 25544 --secondary 43205 --look-ahead 72
 ```
 
-### 1. Fetch Data
-Download the latest TLEs for the ISS and a Starlink satellite, along with current solar flux:
+### 2. Avoidance Maneuver Wizard
+Starts an interactive guide to optimize a fuel-efficient burn:
 ```bash
-oure fetch --sat-id 25544 --sat-id 43205
+oure avoid --primary 25544 --secondary 43205
 ```
 
-### 2. Analyze Conjunctions
-Run the full prediction pipeline to assess risk over the next 72 hours:
+### 3. Fleet Screening
+Screen thousands of secondaries against a fleet of primaries in parallel:
 ```bash
-oure analyze --primary 25544 --secondary 43205 --look-ahead 72 --mc-samples 1000 --output results.json
+oure analyze-fleet --primaries-file p.json --secondaries-file s.json --workers 8
 ```
 
-### 3. Generate Reports
-Export the high-risk alerts to a PDF document:
+### 4. Space Debris Fragmentation
+Simulate a "What-if" collision between two objects:
 ```bash
-oure report --results-file results.json --format pdf --output risk_report.pdf
+oure shatter --primary 25544 --secondary 43205 --fragments 5000
 ```
 
-### 4. Continuous Monitoring
-Watch a specific catalog for upcoming threats, triggering alerts at defined $P_c$ thresholds:
+### 5. Web Dashboard
+Launch the multi-page Streamlit dashboard:
 ```bash
-oure monitor --primary 25544 --secondaries-file my_catalog.json --alert-threshold 1e-4 --interval 3600
+./start_web.sh
 ```
 
 ## Architecture
 
 OURE enforces a strict, decoupled 5-layer architecture:
-1. **Core:** Immutable data models (`StateVector`, `CovarianceMatrix`) and physics constants.
-2. **Data:** Caching and fetching interfaces (`SpaceTrackFetcher`, `NOAASolarFluxFetcher`).
-3. **Physics:** The propagator decorator chain (`SGP4` -> `J2` -> `Drag`).
-4. **Uncertainty:** STM generation and Vectorized Monte Carlo dispersion.
-5. **Conjunction/Risk:** KD-Tree screening, TCA golden-section refinement, and B-Plane Foster integration.
+1. **Core:** Immutable data models (`StateVector`, `CovarianceMatrix`).
+2. **Data:** Caching fetchers (`SpaceTrack`, `NOAA`, `CDM Parser`).
+3. **Physics:** Certified SGP4 and RK45 Numerical integrators.
+4. **Uncertainty:** STM generation, EKF Sensor updates, and Monte Carlo ensembles.
+5. **Conjunction/Risk:** TCA Golden-section search, Foster $P_c$ math, and SLSQP optimization.
+
+## Testing & Quality
+
+OURE maintains high engineering standards:
+- **Test Coverage:** 88%+ enforced via `pytest-cov`.
+- **Static Analysis:** Strict `mypy` typing and `ruff` linting.
+- **Numerical Stability:** Joseph-form covariance updates and eigenvalue-ordered risk projection.
+
+```bash
+make test-all
+```
 
 ## License
 

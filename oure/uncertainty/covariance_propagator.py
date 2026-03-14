@@ -38,26 +38,23 @@ class CovariancePropagator:
         """
         Propagate covariance by dt_seconds.
         """
-        Phi = self.stm.compute(reference_state, dt_seconds)
-        P0 = covariance.matrix
-        P_propagated = Phi @ P0 @ Phi.T
+        phi = self.stm.compute(reference_state, dt_seconds)
+        p0 = covariance.matrix
+        p_propagated = phi @ p0 @ phi.T
 
-        Q = self.noise_model.get_noise_matrix(dt_seconds)
+        q = self.noise_model.get_noise_matrix(dt_seconds)
 
-        P_final = P_propagated + Q
-        P_final = 0.5 * (P_final + P_final.T)
+        p_final = p_propagated + q
+        p_final = 0.5 * (p_final + p_final.T)
 
         target_epoch = covariance.epoch + timedelta(seconds=dt_seconds)
 
         logger.debug(
             f"Covariance propagated Δt={dt_seconds:.0f}s | "
-            f"σ_pos={np.sqrt(P_final[0,0]):.3f} km | "
-            f"σ_vel={np.sqrt(P_final[3,3])*1000:.3f} m/s"
+            f"σ_pos={np.sqrt(p_final[0,0]):.3f} km | "
+            f"σ_vel={np.sqrt(p_final[3,3])*1000:.3f} m/s"
         )
 
         return CovarianceMatrix(
-            matrix=P_final,
-            epoch=target_epoch,
-            sat_id=covariance.sat_id,
-            frame="ECI"
+            matrix=p_final, epoch=target_epoch, sat_id=covariance.sat_id, frame="ECI"
         )

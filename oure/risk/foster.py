@@ -77,23 +77,29 @@ class FosterPcCalculator:
         if lam1 <= 0 or lam2 <= 0:
             return 0.0
 
-        miss_sq = float(b @ np.linalg.inv(C) @ b)
-        u = miss_sq / 2.0
-        v = self.R**2 / (2 * sqrt(lam1 * lam2))
+        # u = 1/2 * b^T * C^-1 * b (Half of Mahalanobis distance squared)
+        C_inv = np.linalg.inv(C)
+        u = 0.5 * float(b @ C_inv @ b)
+
+        # v = R^2 / (2 * sqrt(det(C)))
+        # This parameter represents the scaled collision disk size
+        v = self.R**2 / (2 * np.sqrt(lam1 * lam2))
 
         pc = 0.0
 
+        # Iteratively calculate the Poisson-weighted sum of incomplete gamma terms
         for n in range(self.series_terms):
-            # Term: (exp(-u) * u^n / n!) * gammainc(n+1, v)
-            # Using log space for stability
+            from math import lgamma
             if u > 0:
-                from math import lgamma
+                # Using log-space for numerical stability of (e^-u * u^n / n!)
                 log_weight = -u + n * np.log(u) - lgamma(n + 1)
                 weight = exp(log_weight)
             else:
                 weight = 1.0 if n == 0 else 0.0
-                
+
+            # gammainc(a, x) is the regularized lower incomplete gamma function
             gamma_term = gammainc(n + 1, v)
             pc += weight * gamma_term
 
+        # Summation is already the probability, no further normalization needed
         return float(np.clip(pc, 0, 1))

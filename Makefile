@@ -1,30 +1,33 @@
 # OURE Developer Workflow
+VENV = .venv
+BIN = $(VENV)/bin
 
-.PHONY: install dev lint type test build clean
+.PHONY: install dev lint type test test-all build clean
 
 install:
-	pip install -e .
+	$(BIN)/pip install -e .
 
 dev:
-	pip install -e '.[dev,vis]'
-	pre-commit install
+	$(BIN)/pip install -e '.[dev,web]'
+	$(BIN)/pre-commit install
 
 lint:
-	ruff check oure/ tests/
-	ruff format --check oure/ tests/
+	$(BIN)/ruff check oure/ tests/
+	$(BIN)/ruff format --check oure/ tests/
 
 type:
-	mypy oure/
+	$(BIN)/mypy oure/
 
 test:
-	pytest tests/unit/ -v
+	$(BIN)/pytest tests/unit/ -v
 
 test-all:
-	pytest tests/ -v
+	$(BIN)/pytest tests/ -v --cov=oure --cov-report=term-missing
 
 build:
-	python -m build
+	$(BIN)/python -m build
 
 clean:
-	find . -type d -name __pycache__ -exec rm -rf {} +
-	rm -rf .mypy_cache .pytest_cache dist build
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+	rm -rf .mypy_cache .pytest_cache dist build oure.egg-info
+

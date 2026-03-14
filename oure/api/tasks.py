@@ -7,7 +7,7 @@ import logging
 import os
 from typing import Any
 
-from oure.cli.cmd_analyze import _default_covariance, _tle_to_initial_state
+from oure.cli.utils import _default_covariance, _tle_to_initial_state
 from oure.conjunction.assessor import ConjunctionAssessor
 from oure.data.noaa import NOAASolarFluxFetcher
 from oure.data.spacetrack import SpaceTrackFetcher

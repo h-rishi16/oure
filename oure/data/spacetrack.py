@@ -62,6 +62,7 @@ class SpaceTrackFetcher(BaseDataFetcher):
         self.cache_ttl = cache_ttl_hours * 3600
 
     async def _async_login(self, client: httpx.AsyncClient) -> None:
+        from oure.core.exceptions import SpaceTrackAuthError
         resp = await client.post(
             self.LOGIN_URL,
             data={"identity": self.username, "password": self.password},
@@ -69,7 +70,7 @@ class SpaceTrackFetcher(BaseDataFetcher):
         )
         resp.raise_for_status()
         if "Failed" in resp.text:
-            raise ValueError("Space-Track authentication failed. Check credentials.")
+            raise SpaceTrackAuthError("Space-Track authentication failed. Check credentials.")
         logger.info("Authenticated with Space-Track.org")
 
     async def _async_logout(self, client: httpx.AsyncClient) -> None:
@@ -77,15 +78,20 @@ class SpaceTrackFetcher(BaseDataFetcher):
         logger.info("Logged out from Space-Track.org")
 
     def fetch(self, sat_ids: list[str] | None = None, **kwargs: Any) -> list[TLERecord]:
+        force_refresh = kwargs.get("force_refresh", False)
         if sat_ids:
             results, missing = [], []
-            for sid in sat_ids:
-                cached = self.cache.get_tle(sid)
-                if cached:
-                    logger.debug(f"Cache HIT for NORAD {sid}")
-                    results.append(cached)
-                else:
-                    missing.append(sid)
+            if not force_refresh:
+                for sid in sat_ids:
+                    cached = self.cache.get_tle(sid)
+                    if cached:
+                        logger.debug(f"Cache HIT for NORAD {sid}")
+                        results.append(cached)
+                    else:
+                        missing.append(sid)
+            else:
+                missing = sat_ids
+
             if missing:
                 logger.info(f"Cache MISS for {len(missing)} satellites — fetching network asynchronously")
                 fresh = self._fetch_from_network(sat_ids=missing)
@@ -93,9 +99,10 @@ class SpaceTrackFetcher(BaseDataFetcher):
             return results
         else:
             cache_key = "spacetrack_bulk_leo"
-            if self.cache.get(cache_key) == "fresh":
+            if not force_refresh and self.cache.get(cache_key) == "fresh":
                 logger.info("Using bulk TLE cache (still fresh)")
-                return []
+                return self.cache.get_all_tles()
+
             records = self._fetch_from_network()
             self.cache.set(cache_key, "fresh", self.cache_ttl)
             return records
@@ -153,26 +160,26 @@ class SpaceTrackFetcher(BaseDataFetcher):
 
     def _generate_mock_tles(self, sat_ids: list[str] | None = None) -> list[TLERecord]:
         """Fall back to generated mock TLEs if the network is unavailable."""
-        records = []
+        mock_records = []
         base_id = 90000
         mock_count = len(sat_ids) if (sat_ids and len(sat_ids) > 0) else 50
         for i in range(mock_count):
             sid = str(base_id + i) if not sat_ids else sat_ids[i]
-            records.append(TLERecord(
+            mock_records.append(TLERecord(
                 sat_id=sid,
                 name=f"MOCK-SAT-{sid}",
                 line1=f"1 {sid}U 23001A   23284.00000000  .00000000  00000-0  00000-0 0  9999",
-                line2=f"2 {sid}  {random.uniform(0, 180):.4f} {random.uniform(0, 180):.4f} 0005000 {random.uniform(0, 360):.4f} {random.uniform(0, 360):.4f} {random.uniform(14, 16):.8f}",
+                line2=f"2 {sid}  {random.uniform(0, 180):.4f} {random.uniform(0, 360):.4f} 0005000 {random.uniform(0, 360):.4f} {random.uniform(0, 360):.4f} {random.uniform(14, 16):.8f}",
                 epoch=datetime.now(UTC) - timedelta(days=random.uniform(0, 1)),
                 inclination_deg=random.uniform(0, 180),
-                raan_deg=random.uniform(0, 180),
+                raan_deg=random.uniform(0, 360),
                 eccentricity=0.0005,
                 arg_perigee_deg=random.uniform(0, 360),
                 mean_anomaly_deg=random.uniform(0, 360),
                 mean_motion_rev_per_day=random.uniform(14.0, 16.0),
                 bstar=0.0
             ))
-        return records
+        return mock_records
 
     def _parse_tle_record(self, data: dict[str, Any]) -> TLERecord:
         epoch_str = data.get("EPOCH", "")

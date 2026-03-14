@@ -10,6 +10,7 @@ from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
 from .main import cli
+from .utils import UI
 
 
 class RiskReportPDF(FPDF):
@@ -31,15 +32,21 @@ def report(results_file: str, format: str, output: str) -> None:
     """
     Generate a summary of all high-risk events.
     """
-    with open(results_file) as f:
-        data = json.load(f)
+    UI.header("Report Generator", f"Compiling results from {results_file}")
+
+    try:
+        with open(results_file) as f:
+            data = json.load(f)
+    except Exception as e:
+        UI.error(f"Failed to read results file: {e}")
+        return
 
     if not data:
-        click.echo(click.style("No results found in the input file.", fg="yellow"))
+        UI.error("No results found in the input file.")
         return
 
     high_risk_events = [event for event in data if event.get("warning_level") in ("RED", "YELLOW")]
-    high_risk_events.sort(key=lambda x: x.get("pc", 0), reverse=True)
+    high_risk_events.sort(key=lambda x: float(x.get("pc", 0)), reverse=True)
 
     if format == "pdf":
         pdf = RiskReportPDF()
@@ -55,13 +62,13 @@ def report(results_file: str, format: str, output: str) -> None:
             pdf.cell(0, 8, f"Event #{idx}: {event['primary_id']} vs {event['secondary_id']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_font("helvetica", size=10)
             pdf.cell(0, 6, f"Time of Closest Approach (TCA): {event['tca']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            pdf.cell(0, 6, f"Probability of Collision (Pc): {event['pc']:.2e}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.cell(0, 6, f"Probability of Collision (Pc): {float(event['pc']):.2e}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.cell(0, 6, f"Warning Level: {event['warning_level']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            pdf.cell(0, 6, f"Miss Distance: {event['miss_distance_km']:.3f} km", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            pdf.cell(0, 6, f"Relative Velocity: {event['rel_velocity_km_s']:.2f} km/s", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.cell(0, 6, f"Miss Distance: {float(event['miss_distance_km']):.3f} km", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.cell(0, 6, f"Relative Velocity: {float(event['rel_velocity_km_s']):.2f} km/s", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.ln(5)
 
         pdf.output(output)
-        click.echo(click.style(f"✓ PDF report generated successfully: {output}", fg="green"))
+        UI.success(f"PDF report generated successfully: {output}")
     else:
-        click.echo(click.style(f"Format '{format}' is not yet fully implemented.", fg="yellow"))
+        UI.error(f"Format '{format}' is not yet fully implemented.")

@@ -6,11 +6,12 @@ OURE Physics Engine - SGP4 Propagator
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any
 
 import numpy as np
+from sgp4.api import Satrec, jday
 
 from oure.core import constants
+from oure.core.exceptions import PropagationError
 from oure.core.models import StateVector, TLERecord
 
 from .base import BasePropagator
@@ -20,25 +21,12 @@ from .kepler import solve_kepler_vectorized
 
 class SGP4Propagator(BasePropagator):
     """
-    SGP4 (Simplified General Perturbations 4) — the industry standard for
-    TLE-based orbit prediction.
+    SGP4/SDP4 orbit propagator wrapping the official Vallado sgp4 library.
     """
 
     def __init__(self, tle: TLERecord):
         self.tle = tle
-        self._satellite = self._init_sgp4_satellite()
-
-    def _init_sgp4_satellite(self) -> dict[str, Any]:
-        n0 = self.tle.mean_motion_rev_per_day * constants.TWO_PI / constants.SECONDS_PER_DAY
-        a0 = (constants.MU_KM3_S2 / n0**2) ** (1.0/3.0)
-        return {
-            "n0": n0, "a0": a0, "e0": self.tle.eccentricity,
-            "i0": np.radians(self.tle.inclination_deg),
-            "omega0": np.radians(self.tle.arg_perigee_deg),
-            "raan0": np.radians(self.tle.raan_deg),
-            "M0": np.radians(self.tle.mean_anomaly_deg),
-            "bstar": self.tle.bstar, "epoch": self.tle.epoch,
-        }
+        self._satrec = Satrec.twoline2rv(tle.line1, tle.line2)
 
     @classmethod
     def from_tle(cls, tle: TLERecord) -> SGP4Propagator:
@@ -49,50 +37,68 @@ class SGP4Propagator(BasePropagator):
         return self.propagate_to(state, target)
 
     def propagate_to(self, state: StateVector, target_epoch: datetime) -> StateVector:
-        states = np.atleast_2d(state.state_vector_6d)
-        propagated_states = self.propagate_many_to(states, state.epoch, target_epoch)
-        return StateVector.from_6d(propagated_states[0], target_epoch, state.sat_id)
+        # sgp4 library requires timezone-naive UTC or specific JD
+        # We ensure it's UTC and then get JD
+        jd, fr = jday(target_epoch.year, target_epoch.month, target_epoch.day,
+                      target_epoch.hour, target_epoch.minute, target_epoch.second + target_epoch.microsecond/1e6)
+
+        error_code, r, v = self._satrec.sgp4(jd, fr)
+        if error_code != 0:
+            raise PropagationError(f"SGP4 propagation failed with error code {error_code} for satellite {state.sat_id}")
+
+        return StateVector(
+            r=np.array(r),
+            v=np.array(v),
+            epoch=target_epoch,
+            sat_id=state.sat_id
+        )
 
     def propagate_many_to(self, states: np.ndarray, initial_epoch: datetime, target_epoch: datetime) -> np.ndarray:
-        sat = self._satellite
+        return self._propagate_many_simplified(states, initial_epoch, target_epoch)
 
-        # SGP4 mean elements logic
-        # tsince is in minutes since the TLE epoch
-        tsince = (target_epoch - sat["epoch"]).total_seconds() / 60.0
-        dt_s = tsince * 60.0
+    def _propagate_many_simplified(self, states: np.ndarray, initial_epoch: datetime, target_epoch: datetime) -> np.ndarray:
+        # Simplified SGP4-like logic for state perturbations (Monte Carlo)
+        n0 = self.tle.mean_motion_rev_per_day * constants.TWO_PI / constants.SECONDS_PER_DAY
+        a0 = (constants.MU_KM3_S2 / n0**2) ** (1.0/3.0)
+
+        tsince = (target_epoch - self.tle.epoch).total_seconds() / 60.0
 
         # Secular drag decay
-        a = sat["a0"] * (1 - (2/3) * sat["bstar"] * sat["n0"] * tsince * 60)
-        n = np.sqrt(constants.MU_KM3_S2 / max(a, constants.R_EARTH_KM)**3)
+        a_tle = a0 * (1 - (2/3) * self.tle.bstar * n0 * tsince * 60)
+        n_tle = np.sqrt(constants.MU_KM3_S2 / max(a_tle, constants.R_EARTH_KM)**3)
 
-        # Extract initial COE from input states to allow for state perturbations
-        _, e, i_rad, raan0, omega0, nu0 = rv2coe_vectorized(states[:, :3], states[:, 3:])
+        _, ecc, inc_deg, raan_deg, omega_deg, nu0 = rv2coe_vectorized(states[:, :3], states[:, 3:])
 
-        # Conver true anomaly to mean anomaly
-        E0 = 2 * np.arctan(np.sqrt((1-e)/(1+e)) * np.tan(nu0/2))
-        M0 = E0 - e * np.sin(E0)
+        # Prevent NaN in np.sqrt(1-ecc^2) if noise pushes eccentricity into hyperbolic regime
+        ecc = np.clip(ecc, 0.0, 0.999999)
 
-        p = a * (1 - e**2)
+        inc = np.radians(inc_deg)
+        raan0 = np.radians(raan_deg)
+        omega0 = np.radians(omega_deg)
+
+        E0 = 2 * np.arctan(np.sqrt((1-ecc)/(1+ecc)) * np.tan(nu0/2))
+        M0 = E0 - ecc * np.sin(E0)
+
+        p = a_tle * (1 - ecc**2)
         j2_factor = (3/2) * constants.J2 * (constants.R_EARTH_KM / p)**2
 
         dt_since_initial = (target_epoch - initial_epoch).total_seconds()
 
-        # Apply J2 secular drifts to RAAN and Omega
-        raan  = raan0  - j2_factor * n * np.cos(i_rad) * dt_since_initial
-        omega = omega0 + j2_factor * n * (2.5*np.cos(i_rad)**2 - 0.5) * dt_since_initial
+        raan  = raan0  - j2_factor * n_tle * np.cos(inc) * dt_since_initial
+        omega = omega0 + j2_factor * n_tle * (2.5*np.cos(inc)**2 - 0.5) * dt_since_initial
 
-        # Advance mean anomaly
-        M = M0 + n * dt_since_initial
-        E = solve_kepler_vectorized(M, e)
+        M = M0 + n_tle * dt_since_initial
+        E = solve_kepler_vectorized(M, ecc)
 
-        sin_nu = np.sqrt(1 - e**2) * np.sin(E) / (1 - e*np.cos(E))
-        cos_nu = (np.cos(E) - e) / (1 - e*np.cos(E))
+        sin_nu = np.sqrt(1 - ecc**2) * np.sin(E) / (1 - ecc*np.cos(E))
+        cos_nu = (np.cos(E) - ecc) / (1 - ecc * np.cos(E))
         nu = np.arctan2(sin_nu, cos_nu)
 
-        r_vecs, v_vecs = self._elements_to_eci_vectorized(a, e, i_rad, raan, omega, nu)
+        r_vecs, v_vecs = self._elements_to_eci_vectorized(a_tle, ecc, inc, raan, omega, nu)
 
         return np.hstack([r_vecs, v_vecs])
-    def _elements_to_eci_vectorized(self, a: np.ndarray, e: np.ndarray, i: np.ndarray, raan: np.ndarray, omega: np.ndarray, nu: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+
+    def _elements_to_eci_vectorized(self, a: np.ndarray | float, e: np.ndarray, i: np.ndarray, raan: np.ndarray, omega: np.ndarray, nu: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         p = a * (1 - e**2)
         r_mag = p / (1 + e * np.cos(nu))
 
@@ -101,7 +107,8 @@ class SGP4Propagator(BasePropagator):
         r_pqw[:, 1] = r_mag * np.sin(nu)
 
         v_pqw = np.zeros((len(nu), 3))
-        v_mult = np.sqrt(constants.MU_KM3_S2 / p)
+        p_safe = np.maximum(p, 1e-9)
+        v_mult = np.sqrt(constants.MU_KM3_S2 / p_safe)
         v_pqw[:, 0] = -v_mult * np.sin(nu)
         v_pqw[:, 1] = v_mult * (e + np.cos(nu))
 

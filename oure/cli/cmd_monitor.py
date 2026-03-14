@@ -7,12 +7,11 @@ import time
 from datetime import UTC, datetime
 
 import click
-from rich.console import Console
 
 from .cmd_analyze import analyze
 from .main import cli
+from .utils import UI, console
 
-console = Console()
 
 @cli.command()
 @click.option("--primary", "-p", required=True)
@@ -28,18 +27,18 @@ def monitor(ctx: click.Context, primary: str, secondaries_file: str, alert_thres
     """
     Continuous conjunction monitoring with configurable alert thresholds.
     """
+    UI.header("Continuous Risk Monitor", f"Watching primary {primary} for new threats")
     run_count = 0
 
-    console.print(f"\n[bold blue]🛡️  OURE Monitor — Primary: {primary}[/bold blue]")
-    console.print(f"   Alert threshold: Pc ≥ {alert_threshold:.0e}")
-    console.print(f"   Re-evaluation: every {interval}s\n")
+    console.print(f"   [info]Alert threshold:[/info] Pc ≥ {alert_threshold:.0e}")
+    console.print(f"   [info]Interval:[/info]        Every {interval}s\n")
     console.print("   [dim]Press Ctrl-C to stop.[/dim]\n")
 
     try:
         while True:
             run_count += 1
             timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
-            console.print(f"[cyan][{timestamp}] Run #{run_count}  — invoking ctx.invoke(analyze)...[/cyan]")
+            console.print(f"[bold cyan][{timestamp}] Run #{run_count}[/bold cyan]")
 
             results = ctx.invoke(
                 analyze,
@@ -63,15 +62,16 @@ def monitor(ctx: click.Context, primary: str, secondaries_file: str, alert_thres
                         miss_distance_km=r.conjunction.miss_distance_km,
                         warning_level=r.warning_level
                     )
-                console.print(f"[dim]Logged {len(results)} events to risk history database.[/dim]")
+                console.print(f"   [success]DONE[/success] [dim]Logged {len(results)} events to risk history database.[/dim]")
 
             if max_runs and run_count >= max_runs:
-                console.print("\n[bold green]Max runs reached. Exiting monitor.[/bold green]")
+                UI.success("Max runs reached. Exiting monitor.")
                 break
 
-            console.print(f"\n   [dim]⏱  Next evaluation in {interval}s...[/dim]\n")
-            time.sleep(interval)
+            # Enforce minimum sleep interval of 1s to prevent infinite spin if interval is small/zero
+            actual_sleep = max(1, interval)
+            console.print(f"\n   [dim]Next evaluation in {actual_sleep}s...[/dim]\n")
+            time.sleep(actual_sleep)
 
     except KeyboardInterrupt:
-        console.print("\n\n[bold yellow]Monitor stopped by user.[/bold yellow]")
-
+        console.print("\n\n[warning]Monitor stopped by user.[/warning]")

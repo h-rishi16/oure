@@ -1,13 +1,14 @@
 """
-OURE CLI - Fleet Command (Distributed "All-on-All" Screening)
+OURE CLI - fleet Command (Distributed "All-on-All" Screening)
 =============================================================
 """
 import json
+import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+from typing import Any
 
 import click
-from rich.console import Console
 from rich.progress import (
     BarColumn,
     Progress,
@@ -17,20 +18,20 @@ from rich.progress import (
 )
 
 from oure.conjunction.assessor import ConjunctionAssessor
+from oure.core.models import RiskResult
 from oure.physics.factory import PropagatorFactory
 from oure.risk.calculator import RiskCalculator
 
-from .cmd_analyze import (
+from .main import OUREContext, cli
+from .utils import (
+    UI,
     _default_covariance,
     _print_results_table,
     _save_results_to_json,
     _tle_to_initial_state,
+    console,
 )
-from typing import Any
-from oure.core.models import RiskResult
-from .main import cli, OUREContext
 
-console = Console()
 
 def _screen_single_primary(primary_id: str, primary_tle: Any, secondary_ids: list[str], records: dict[str, Any], flux: float, look_ahead: float, screening_dist: float, hard_body_radius: float) -> list[RiskResult]:
     try:
@@ -69,20 +70,29 @@ def _screen_single_primary(primary_id: str, primary_tle: Any, secondary_ids: lis
 @click.pass_context
 def analyze_fleet(ctx: click.Context, primaries_file: str, secondaries_file: str, look_ahead: float, screening_dist: float, hard_body_radius: float, workers: int, output: str) -> None:
     """Run distributed conjunction screening for an entire fleet."""
-    oure_ctx = ctx.obj
+    oure_ctx: OUREContext = ctx.obj
+    UI.header("Fleet Screening Engine", "Distributed multi-satellite proximity search")
 
-    with open(primaries_file) as f: primary_ids = json.load(f)
-    with open(secondaries_file) as f: secondary_ids = json.load(f)
+    try:
+        with open(primaries_file) as f: primary_ids = json.load(f)
+        with open(secondaries_file) as f: secondary_ids = json.load(f)
+    except Exception as e:
+        UI.error(f"Failed to read fleet files: {e}")
+        sys.exit(1)
 
     all_ids = list(set(primary_ids + secondary_ids))
 
-    console.print(f"[cyan]Fetching TLE data for {len(all_ids)} objects...[/cyan]")
-    records = {r.sat_id: r for r in oure_ctx.tle_fetcher.fetch(sat_ids=all_ids)}
-    flux = oure_ctx.flux_fetcher.get_current_f107()
+    with console.status("[bold cyan]Fetching TLE data...") as status:
+        try:
+            records = {r.sat_id: r for r in oure_ctx.tle_fetcher.fetch(sat_ids=all_ids)}
+            flux = oure_ctx.flux_fetcher.get_current_f107()
+        except Exception as e:
+            UI.error(f"Data fetch failed: {e}")
+            sys.exit(1)
 
     all_results = []
 
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), TaskProgressColumn()) as progress:
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), TaskProgressColumn(), console=console) as progress:
         task = progress.add_task("[cyan]Screening fleet (Distributed)...", total=len(primary_ids))
 
         with ProcessPoolExecutor(max_workers=workers) as executor:
@@ -98,10 +108,10 @@ def analyze_fleet(ctx: click.Context, primaries_file: str, secondaries_file: str
                 progress.update(task, advance=1)
 
     if not all_results:
-        console.print("[bold green]No conjunctions found across the fleet.[/bold green]")
+        UI.success("No conjunctions found across the fleet.")
         return
 
     all_results.sort(key=lambda r: r.pc, reverse=True)
     _print_results_table(all_results[:20]) # show top 20
     _save_results_to_json(all_results, Path(output))
-    console.print(f"\n[bold green]Saved {len(all_results)} total events to {output}[/bold green]")
+    UI.success(f"Saved {len(all_results)} total events to {output}")

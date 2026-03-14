@@ -51,43 +51,72 @@ class ConjunctionAssessor:
 
         logger.info(f"Screening {len(secondaries)} objects over {look_ahead_hours}h ({n_steps} steps)")
 
-        candidate_pairs: dict[int, list[datetime]] = {}
-        
-        # Group secondaries by propagator type for potential future batching
-        # For now, we still iterate steps, but we can optimize the inner loops
-        
+        # candidate_pairs maps secondary index -> (first_flagged_epoch, last_flagged_epoch)
+        candidate_pairs: dict[int, tuple[datetime, datetime]] = {}
+
+        # Pre-allocate position buffer — reused every step
+        n_sec = len(secondaries)
+        sec_positions = np.zeros((n_sec, 3))
+
+        # Optimization: Group secondaries by their propagator instance to enable batching
+        from collections import defaultdict
+        prop_groups = defaultdict(list)
+        for j, (_, _, s_prop) in enumerate(secondaries):
+            prop_groups[id(s_prop)].append(j)
+
         for dt in time_offsets:
             epoch = t0 + timedelta(seconds=dt)
             p_state = primary_propagator.propagate_to(primary, epoch)
 
-            sec_positions = np.zeros((len(secondaries), 3))
-            
-            # TODO: Future optimization - implement propagate_many in all base propagators
-            # and use it here to eliminate the inner Python loop.
-            for j, (s_state, _, s_prop) in enumerate(secondaries):
-                try:
-                    s_prop_state = s_prop.propagate_to(s_state, epoch)
-                    sec_positions[j] = s_prop_state.r
-                except Exception:
-                    sec_positions[j] = np.array([1e9, 1e9, 1e9])
+            # Propagate secondaries in groups
+            for prop_id, indices in prop_groups.items():
+                first_idx = indices[0]
+                s_prop = secondaries[first_idx][2]
+                s_states_6d = np.array([secondaries[idx][0].state_vector_6d for idx in indices])
+                s_epochs = [secondaries[idx][0].epoch for idx in indices]
+                
+                if all(e == s_epochs[0] for e in s_epochs):
+                    try:
+                        ghost_vecs = s_prop.propagate_many_to(s_states_6d, s_epochs[0], epoch)
+                        sec_positions[indices] = ghost_vecs[:, :3]
+                    except Exception:
+                        sec_positions[indices] = (1e9, 1e9, 1e9)
+                else:
+                    for idx in indices:
+                        try:
+                            s_state, _, s_prop = secondaries[idx]
+                            sec_positions[idx] = s_prop.propagate_to(s_state, epoch).r
+                        except Exception:
+                            sec_positions[idx] = (1e9, 1e9, 1e9)
 
-            index = KDTreeSpatialIndex(sec_positions)
-            close_indices = index.query_radius(p_state.r, self.screening_distance)
+            # Stage 1: Proximity Filtering
+            # Use KD-Tree for massive catalogs (optimal O(log N)), 
+            # otherwise use vectorized O(N) which is faster for small fleets.
+            if n_sec > 500:
+                index = KDTreeSpatialIndex(sec_positions)
+                close_indices = index.query_radius(p_state.r, radius_km=self.screening_distance)
+            else:
+                dists = np.linalg.norm(sec_positions - p_state.r, axis=1)
+                close_indices = np.where(dists <= self.screening_distance)[0].tolist()
 
             for idx in close_indices:
                 if idx not in candidate_pairs:
-                    candidate_pairs[idx] = []
-                candidate_pairs[idx].append(epoch)
+                    candidate_pairs[int(idx)] = (epoch, epoch)
+                else:
+                    t_min, t_max = candidate_pairs[int(idx)]
+                    candidate_pairs[int(idx)] = (min(t_min, epoch), max(t_max, epoch))
 
         logger.info(f"Stage 1 found {len(candidate_pairs)} candidate pairs")
 
         conjunction_events = []
-        for sec_idx, flagged_epochs in candidate_pairs.items():
+        for sec_idx, (t_start, t_end) in candidate_pairs.items():
             s_state, s_cov, s_prop = secondaries[sec_idx]
 
+            # Widen the TCA search window by one step on each side for safety
+            margin = timedelta(seconds=self.tca_time_step_s)
             tca_result = self.tca_finder.find_tca(
                 primary, primary_propagator, s_state, s_prop,
-                min(flagged_epochs), max(flagged_epochs)
+                t_start - margin, t_end + margin,
             )
 
             if tca_result:

@@ -1,0 +1,24 @@
+# Docker Ignore Rules
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.coverage
+dist/
+build/
+*.egg-info/
+.git/
+.gitignore
+.geminiignore
+.pre-commit-config.yaml
+tests/
+Makefile
+pyproject.toml
+README.md
+CHANGELOG.md
+mock_results.json
+*.db
+*.html
+*.pdf
+*.log

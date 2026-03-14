@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # The FastAPI REST Backend
+  api:
+    build: .
+    command: uvicorn oure.api.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - SPACETRACK_USER=${SPACETRACK_USER}
+      - SPACETRACK_PASS=${SPACETRACK_PASS}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+
+  # The Celery Worker for heavy physics tasks
+  worker:
+    build: .
+    command: celery -A oure.api.tasks.celery_app worker --loglevel=info
+    environment:
+      - SPACETRACK_USER=${SPACETRACK_USER}
+      - SPACETRACK_PASS=${SPACETRACK_PASS}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+
+  # Redis Broker
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  # The Streamlit Dashboard
+  dashboard:
+    build: .
+    command: streamlit run oure/dashboard/app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      - BACKEND_URL=http://api:8000
+    depends_on:
+      - api

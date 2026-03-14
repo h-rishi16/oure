@@ -4,9 +4,9 @@ import pandas as pd
 import requests
 import streamlit as st
 
-st.set_page_config(page_title="OURE Dashboard", page_icon="🛰️", layout="wide")
+st.set_page_config(page_title="OURE Dashboard", layout="wide")
 
-st.title("🛰️ OURE Space Operations Center")
+st.title("OURE Space Operations Center")
 st.markdown("Monitor high-risk conjunction events and analyze Conjunction Data Messages (CDMs) in real-time.")
 
 st.sidebar.header("Navigation")
@@ -87,7 +87,7 @@ elif page == "CDM Analysis Tool":
                         st.metric("Miss Distance", f"{res.conjunction.miss_distance_km:.3f} km")
 
                     if res.warning_level == "RED":
-                        st.error("🚨 EMERGENCY: Collision threshold exceeded. Recommend immediate avoidance maneuver analysis.")
+                        st.error("EMERGENCY: Collision threshold exceeded. Recommend immediate avoidance maneuver analysis.")
 
                     st.subheader("Encounter Visualizations")
                     tab1, tab2 = st.tabs(["3D Orbital Geometry", "2D B-Plane Projection"])

@@ -64,36 +64,47 @@ class ManeuverOptimizer:
         Runs the SLSQP optimizer to find the optimal 3D Delta-V vector.
         max_dv_km_s: Maximum allowable thrust in km/s (default 10 m/s).
         """
+        # Pre-propagate the secondary to the nominal TCA *once*.
+        # The secondary is unaffected by our maneuver — its TCA state is constant.
+        # Without this, it is re-propagated on every single SLSQP function evaluation.
+        s_tca_nominal = self.base_prop.propagate_to(self.secondary_state, self.nominal_tca)
+
+        # Pre-propagate primary to burn epoch for the initial-guess velocity direction.
+        burn_state = self.base_prop.propagate_to(self.primary_state, self.burn_epoch)
 
         def objective(dv: np.ndarray) -> float:
             """Objective: Minimize the magnitude of the Delta-V vector (save fuel)."""
-            # We minimize the sum of squares, scaled up for numerical stability
             return float(np.sum(dv**2) * 1e6)
 
         def constraint_pc(dv: np.ndarray) -> float:
             """
-            Constraint: Target Pc - Actual Pc >= 0 
+            Constraint: Target Pc - Actual Pc >= 0
             (Actual Pc must be less than or equal to Target Pc)
             """
             maneuver = Maneuver(burn_epoch=self.burn_epoch, delta_v_eci=dv)
             man_prop = ManeuverPropagator(self.base_prop, [maneuver])
 
-            # Search for the new TCA dynamically (burns shift the TCA slightly)
-            # We restrict the search window to +/- 2 hours around nominal TCA for speed
+            # Narrow search window to ±1h — find_tca now exits fast when no
+            # minimum exists, so a tight window adds negligible overhead.
             tca_res = self.tca_finder.find_tca(
                 self.primary_state, man_prop,
                 self.secondary_state, self.base_prop,
-                self.nominal_tca - timedelta(hours=2),
-                self.nominal_tca + timedelta(hours=2)
+                self.nominal_tca - timedelta(hours=1),
+                self.nominal_tca + timedelta(hours=1),
             )
 
             if not tca_res:
-                return self.target_pc # No conjunction found = perfectly safe
+                return self.target_pc  # No conjunction found — constraint satisfied
 
             new_tca, new_miss = tca_res
 
             p_tca = man_prop.propagate_to(self.primary_state, new_tca)
-            s_tca = self.base_prop.propagate_to(self.secondary_state, new_tca)
+            # Re-use the pre-propagated secondary state if the TCA hasn't shifted much
+            if abs((new_tca - self.nominal_tca).total_seconds()) < 60.0:
+                s_tca = s_tca_nominal
+            else:
+                s_tca = self.base_prop.propagate_to(self.secondary_state, new_tca)
+
             v_rel = float(np.linalg.norm(p_tca.v - s_tca.v))
 
             event = ConjunctionEvent(
@@ -105,23 +116,16 @@ class ManeuverOptimizer:
                 primary_state=p_tca,
                 secondary_state=s_tca,
                 primary_covariance=self.primary_cov,
-                secondary_covariance=self.secondary_cov
+                secondary_covariance=self.secondary_cov,
             )
 
             risk = self.risk_calc.compute_pc(event)
-
-            # We want risk.pc <= target_pc, so (target_pc - risk.pc) should be >= 0
             return self.target_pc - risk.pc
 
-        # Determine the initial guess (x0). A small prograde burn is a good starting point.
-        burn_state = self.base_prop.propagate_to(self.primary_state, self.burn_epoch)
         v_hat = burn_state.v / np.linalg.norm(burn_state.v)
-        x0 = v_hat * 1e-5 # 1 cm/s prograde
+        x0 = v_hat * 1e-5  # 1 cm/s prograde initial guess
 
-        # Bounds: prevent the optimizer from suggesting impossible maneuvers
         bnds = [(-max_dv_km_s, max_dv_km_s)] * 3
-
-        # Define the inequality constraint
         cons = {'type': 'ineq', 'fun': constraint_pc}
 
         logger.info("Starting SLSQP maneuver optimization...")
@@ -131,7 +135,7 @@ class ManeuverOptimizer:
             method='SLSQP',
             bounds=bnds,
             constraints=cons,
-            options={'disp': False, 'ftol': 1e-8, 'maxiter': 50}
+            options={'disp': False, 'ftol': 1e-8, 'maxiter': 25},
         )
 
         if res.success:

@@ -4,7 +4,6 @@ OURE CLI - Fetch Command
 """
 
 import json
-import logging
 import sys
 from pathlib import Path
 from typing import Any
@@ -14,6 +13,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .main import OUREContext, cli
+from .utils import UI, console
 
 console = Console()
 
@@ -49,38 +49,39 @@ def fetch(ctx: click.Context, sat_id: tuple[str, ...], all_leo: bool, output: st
     Fetch TLE data from Space-Track.org and F10.7 flux from NOAA.
     """
     oure_ctx: OUREContext = ctx.obj
-    log = logging.getLogger("oure.cli.fetch")
+    UI.header("Data Ingestion Engine", "Syncing orbital catalogs and space weather")
 
-    console.print("📡 Fetching solar flux from NOAA...", style="bold blue")
-    flux_data = oure_ctx.flux_fetcher.fetch()
-    if flux_data:
-        f = flux_data[0]
-        console.print(f"   [cyan]F10.7 = {f.f10_7:.1f} sfu[/cyan]  (Date: {f.date.strftime('%Y-%m-%d')})")
+    with console.status("[bold cyan]Fetching solar flux from NOAA...") as status:
+        flux_data = oure_ctx.flux_fetcher.fetch()
+        if flux_data:
+            f = flux_data[0]
+            console.print(f"   [info]F10.7 = {f.f10_7:.1f} sfu[/info]  (Date: {f.date.strftime('%Y-%m-%d')})")
 
     ids_to_fetch = list(sat_id) if sat_id else None
     if all_leo:
-        console.print("🛰️  Fetching all LEO catalog objects...", style="bold blue")
+        console.print("[info]Fetching all LEO catalog objects...[/info]")
         ids_to_fetch = None
     elif ids_to_fetch:
-        console.print(f"🛰️  Fetching TLEs for {len(ids_to_fetch)} satellite(s)...", style="bold blue")
+        console.print(f"[info]Fetching TLEs for {len(ids_to_fetch)} satellite(s)...[/info]")
 
     if not ids_to_fetch and not all_leo:
-        console.print("⚠  No satellites specified. Use --sat-id or --all-leo.", style="bold yellow")
+        UI.error("No satellites specified.", "Use --sat-id or --all-leo.")
         return
 
     try:
-        records = oure_ctx.tle_fetcher.fetch(sat_ids=ids_to_fetch, force_refresh=force_refresh)
+        with console.status("[bold cyan]Querying Space-Track API...") as status:
+            records = oure_ctx.tle_fetcher.fetch(sat_ids=ids_to_fetch, force_refresh=force_refresh)
     except Exception as e:
-        console.print(f"✗ Critical Fetch Error: {e}", style="bold red")
+        UI.error(f"Critical Fetch Error: {e}")
         sys.exit(1)
 
-    console.print(f"\n✓ Processed {len(records)} TLE records.", style="bold green")
+    UI.success(f"Processed {len(records)} TLE records.")
 
-    table = Table(title="Fetched Satellites")
-    table.add_column("SAT ID", style="cyan")
-    table.add_column("NAME", style="magenta")
-    table.add_column("INCLINATION", justify="right", style="green")
-    table.add_column("EST. ALTITUDE", justify="right", style="green")
+    table = Table(title="Satellite Inventory", box=None, border_style="dim")
+    table.add_column("SAT ID", style="info")
+    table.add_column("NAME", style="highlight")
+    table.add_column("INCLINATION", justify="right", style="success")
+    table.add_column("EST. ALTITUDE", justify="right", style="success")
 
     for r in records[:10]:
         table.add_row(
@@ -92,8 +93,8 @@ def fetch(ctx: click.Context, sat_id: tuple[str, ...], all_leo: bool, output: st
     console.print(table)
 
     if len(records) > 10:
-        console.print(f"... and {len(records)-10} more satellites hidden.", style="dim")
+        console.print(f"[dim]... and {len(records)-10} more satellites hidden.[/dim]")
 
     if output:
         _save_tles_to_json(records, Path(output))
-        console.print(f"💾 TLEs Saved to {output}", style="bold green")
+        UI.success(f"TLEs Saved to {output}")
