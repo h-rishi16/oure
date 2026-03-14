@@ -26,20 +26,20 @@ The CLI is the primary tool for orbital analysts.
 
 #### Conjunction Analysis
 To check if two satellites will collide in the next 72 hours:
-```bash
+```
 oure analyze --primary 25544 --secondary 43205 --look-ahead 72
 ```
 
 #### Avoidance Wizard
 If a high-risk event is found, run the interactive wizard to plan a maneuver:
-```bash
+```
 oure avoid --primary 25544 --secondary 43205
 ```
 This tool will ask you when you want to burn and calculate the optimal 3D Delta-V vector.
 
 #### Fleet Monitoring
 To monitor a list of assets continuously:
-```bash
+```
 oure monitor --primary 25544 --secondaries-file my_catalog.json --interval 3600
 ```
 
