@@ -20,24 +20,21 @@ Built for mission-critical speed and mathematical rigor, OURE processes Two-Line
 
 ## Installation
 
-OURE requires Python 3.11 or higher.
+OURE is designed to be ready in seconds.
 
-1. Clone the repository:
+1. **Clone and Install:**
    ```bash
-   git clone https://github.com/yourusername/oure.git
+   git clone https://github.com/h-rishi16/oure.git
    cd oure
+   bash install.sh
    ```
 
-2. Setup virtual environment and install:
+2. **Start Analyzing:**
    ```bash
-   make install
+   oure analyze --primary 25544 --secondary 43205
    ```
 
-3. Configure credentials in `keys.env`:
-   ```env
-   SPACETRACK_USER=your_email@example.com
-   SPACETRACK_PASS=your_password
-   ```
+*Note: If you haven't added `~/.local/bin` to your PATH, you can run it via `./install.sh` or use the full path.*
 
 ## Usage
 

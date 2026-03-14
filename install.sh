@@ -1,70 +1,56 @@
 #!/bin/bash
 
-# OURE (Orbital Uncertainty & Risk Engine) Installer
-# Inspired by the Homebrew installation experience.
-
+# OURE (Orbital Uncertainty & Risk Engine) - Pro Installer
 set -e
 
-# Colors for terminal output
-RED='\033[0;31m'
+# Colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-echo -e "${BLUE}==>${NC} ${BOLD}Starting OURE Installation...${NC}"
+echo -e "${BLUE}==> Starting OURE Global Installation...${NC}"
 
-# 1. Check for Python 3.11+
-if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}Error: python3 not found. Please install Python 3.11 or higher.${NC}"
-    exit 1
-fi
-
-PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
-if (( $(echo "$PYTHON_VERSION < 3.11" | bc -l) )); then
-    echo -e "${RED}Error: OURE requires Python 3.11+. Found: $PYTHON_VERSION${NC}"
-    exit 1
-fi
-
-# 2. Define Paths
+# 1. Environment Setup
 INSTALL_DIR="$HOME/.oure/app"
 BIN_DIR="$HOME/.local/bin"
-EXECUTABLE="$BIN_DIR/oure"
-
-echo -e "${BLUE}==>${NC} Preparing installation directory: $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$BIN_DIR"
 
-# 3. Create Virtual Environment
-echo -e "${BLUE}==>${NC} Creating self-contained virtual environment..."
+echo -e "${BLUE}==>${NC} Setting up sandbox environment..."
 python3 -m venv "$INSTALL_DIR/venv"
-
-# 4. Install OURE
-echo -e "${BLUE}==>${NC} Installing OURE Risk Engine..."
 "$INSTALL_DIR/venv/bin/pip" install --upgrade pip --quiet
-# Note: In a real curl-install, this would point to a URL or a GitHub Repo
-# For now, it installs from the current directory if available, or PyPI.
-if [ -d "./oure" ]; then
-    "$INSTALL_DIR/venv/bin/pip" install . --quiet
+"$INSTALL_DIR/venv/bin/pip" install .[web] --quiet
+
+# 2. Credential Setup
+if [ ! -f "keys.env" ]; then
+    echo -e "${YELLOW}==> Space-Track Credentials Required${NC}"
+    read -p "Enter Space-Track Email: " st_user
+    read -s -p "Enter Space-Track Password: " st_pass
+    echo ""
+    echo "SPACETRACK_USER=$st_user" > "$INSTALL_DIR/keys.env"
+    echo "SPACETRACK_PASS=$st_pass" >> "$INSTALL_DIR/keys.env"
+    # Also save a copy locally for the dev repo
+    cp "$INSTALL_DIR/keys.env" ./keys.env
 else
-    # Fallback to PyPI if you have uploaded it
-    "$INSTALL_DIR/venv/bin/pip" install oure-risk-engine --quiet
+    cp keys.env "$INSTALL_DIR/keys.env"
 fi
 
-# 5. Create Symlink/Wrapper
-echo -e "${BLUE}==>${NC} Creating global command link..."
-cat <<EOF > "$EXECUTABLE"
+# 3. Create Global Wrapper
+echo -e "${BLUE}==>${NC} Linking global 'oure' command..."
+cat <<EOF > "$BIN_DIR/oure"
 #!/bin/bash
-export PYTHONPATH="$INSTALL_DIR"
+export \$(grep -v '^#' "$INSTALL_DIR/keys.env" | xargs)
 "$INSTALL_DIR/venv/bin/oure" "\$@"
 EOF
-chmod +x "$EXECUTABLE"
+chmod +x "$BIN_DIR/oure"
 
-# 6. Check if BIN_DIR is in PATH
+# 4. Success Message
+echo -e "\n${GREEN}✓ OURE successfully installed to $BIN_DIR/oure${NC}"
+
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-    echo -e "${RED}Warning: $BIN_DIR is not in your PATH.${NC}"
-    echo -e "Add this to your .zshrc or .bash_profile:"
-    echo -e "  export PATH=\"\$PATH:$BIN_DIR\""
+    echo -e "${YELLOW}Important:${NC} Add $BIN_DIR to your PATH to use 'oure' from anywhere."
+    echo -e "Run this: ${BLUE}echo 'export PATH=\"\$PATH:$BIN_DIR\"' >> ~/.zshrc && source ~/.zshrc${NC}"
+else
+    echo -e "${BLUE}==>${NC} You can now run: ${GREEN}oure --help${NC}"
 fi
-
-echo -e "${GREEN}==>${NC} ${BOLD}OURE Installation Successful!${NC}"
-echo -e "${BLUE}==>${NC} Type 'oure --help' to get started."
