@@ -83,6 +83,7 @@ from . import cmd_fleet
 from . import cmd_cdm
 from . import cmd_history
 from . import cmd_shatter
+from . import cmd_sensor
 
 if __name__ == "__main__":
     cli(auto_envvar_prefix="OURE")
