@@ -14,18 +14,18 @@ from scipy.integrate import solve_ivp
 from oure.core import constants
 from oure.core.models import StateVector
 
+from .atmosphere import AtmosphericModel
 from .base import BasePropagator
-from .drag_corrector import AtmosphericDragCorrector
 
 
 class NumericalPropagator(BasePropagator):
     """
     High-Precision Orbit Propagator using Runge-Kutta 4(5) numerical integration.
-    
+
     Unlike SGP4 (which uses analytical mean elements), this integrates the exact
-    equations of motion [r, v] step-by-step. It easily supports injecting instant 
+    equations of motion [r, v] step-by-step. It easily supports injecting instant
     delta-V maneuvers.
-    
+
     Includes:
     - Point-mass gravity
     - J2 Oblateness
@@ -37,17 +37,13 @@ class NumericalPropagator(BasePropagator):
         cd: float = 2.2,
         area_m2: float = 10.0,
         mass_kg: float = 500.0,
-        solar_flux: float = 150.0
+        solar_flux: float = 150.0,
     ):
         self.cd = cd
         self.am_ratio = area_m2 / mass_kg
         self.f10_7 = solar_flux
 
-        # We instantiate a dummy DragCorrector just to reuse its validated density table logic
-        self._drag_model = AtmosphericDragCorrector(
-            base_propagator=None, # type: ignore
-            cd=cd, area_m2=area_m2, mass_kg=mass_kg, solar_flux=solar_flux
-        )
+        self._atmo = AtmosphericModel(solar_flux=solar_flux)
 
     def _dynamics(self, t: float, y: np.ndarray) -> np.ndarray:
         """
@@ -63,17 +59,25 @@ class NumericalPropagator(BasePropagator):
 
         # 2. J2 Perturbation
         z = r[2]
-        factor = -1.5 * constants.J2 * constants.MU_KM3_S2 * constants.R_EARTH_KM**2 / (r_mag**5)
-        z_ratio = (z / r_mag)**2
-        a_j2 = factor * np.array([
-            r[0] * (1 - 5 * z_ratio),
-            r[1] * (1 - 5 * z_ratio),
-            r[2] * (3 - 5 * z_ratio)
-        ])
+        factor = (
+            -1.5
+            * constants.J2
+            * constants.MU_KM3_S2
+            * constants.R_EARTH_KM**2
+            / (r_mag**5)
+        )
+        z_ratio = (z / r_mag) ** 2
+        a_j2 = factor * np.array(
+            [
+                r[0] * (1 - 5 * z_ratio),
+                r[1] * (1 - 5 * z_ratio),
+                r[2] * (3 - 5 * z_ratio),
+            ]
+        )
 
         # 3. Atmospheric Drag
         altitude = r_mag - constants.R_EARTH_KM
-        rho = self._drag_model._atmospheric_density(float(altitude))
+        rho = self._atmo.get_density(float(altitude))
 
         # Co-rotation of atmosphere
         v_rel = v.copy()
@@ -102,13 +106,14 @@ class NumericalPropagator(BasePropagator):
             fun=self._dynamics,
             t_span=[0, dt_seconds],
             y0=y0,
-            method='RK45',
+            method="RK45",
             rtol=1e-8,
-            atol=1e-8
+            atol=1e-8,
         )
 
         if not sol.success:
             from oure.core.exceptions import PropagationError
+
             raise PropagationError(f"Numerical integration failed: {sol.message}")
 
         y_final = sol.y[:, -1]
@@ -116,11 +121,15 @@ class NumericalPropagator(BasePropagator):
         r_final = y_final[:3]
         if np.linalg.norm(r_final) < constants.R_EARTH_KM:
             from oure.core.exceptions import PropagationError
-            raise PropagationError("Trajectory impacted Earth's surface during numerical propagation.")
+
+            raise PropagationError(
+                "Trajectory impacted Earth's surface during numerical propagation."
+            )
 
         target_epoch = state.epoch + timedelta(seconds=dt_seconds)
 
         return StateVector.from_6d(y_final, target_epoch, state.sat_id)
+
     def propagate_to(self, state: StateVector, target_epoch: datetime) -> StateVector:
         dt = (target_epoch - state.epoch).total_seconds()
         return self.propagate(state, dt)
@@ -136,12 +145,18 @@ class NumericalPropagator(BasePropagator):
         r_mag = np.linalg.norm(r, axis=1)
 
         # 1. Two-Body Gravity
-        a_grav = -constants.MU_KM3_S2 * r / (r_mag[:, np.newaxis]**3)
+        a_grav = -constants.MU_KM3_S2 * r / (r_mag[:, np.newaxis] ** 3)
 
         # 2. J2 Perturbation
         z = r[:, 2]
-        factor = -1.5 * constants.J2 * constants.MU_KM3_S2 * constants.R_EARTH_KM**2 / (r_mag**5)
-        z_ratio = (z / r_mag)**2
+        factor = (
+            -1.5
+            * constants.J2
+            * constants.MU_KM3_S2
+            * constants.R_EARTH_KM**2
+            / (r_mag**5)
+        )
+        z_ratio = (z / r_mag) ** 2
 
         a_j2 = np.zeros_like(r)
         a_j2[:, 0] = factor * r[:, 0] * (1 - 5 * z_ratio)
@@ -150,7 +165,7 @@ class NumericalPropagator(BasePropagator):
 
         # 3. Atmospheric Drag
         altitude = r_mag - constants.R_EARTH_KM
-        rho = self._drag_model._atmospheric_density_vectorized(altitude)
+        rho = self._atmo.get_density_vectorized(altitude)
 
         # Co-rotation
         v_rel = v.copy()
@@ -170,7 +185,9 @@ class NumericalPropagator(BasePropagator):
         a_tot = a_grav + a_j2 + a_drag
         return np.hstack([v, a_tot]).flatten()
 
-    def propagate_many_to(self, states: np.ndarray, initial_epoch: datetime, target_epoch: datetime) -> np.ndarray:
+    def propagate_many_to(
+        self, states: np.ndarray, initial_epoch: datetime, target_epoch: datetime
+    ) -> np.ndarray:
         dt_seconds = (target_epoch - initial_epoch).total_seconds()
         if dt_seconds == 0:
             return states
@@ -187,4 +204,4 @@ class NumericalPropagator(BasePropagator):
         )
 
         y_final = sol.y[:, -1]
-        return cast('np.ndarray', y_final.reshape(-1, 6))
+        return cast("np.ndarray", y_final.reshape(-1, 6))

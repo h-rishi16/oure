@@ -45,11 +45,15 @@ class BPlaneProjector:
 
         T = np.array([xi_hat, zeta_hat])
 
-        C_primary = event.primary_covariance.matrix[:3, :3]
-        C_secondary = event.secondary_covariance.matrix[:3, :3]
-        C_combined_3d = C_primary + C_secondary
+        # 2x6 projection matrix to project 6x6 covariance onto the 2D B-plane
+        T_full = np.zeros((2, 6))
+        T_full[:, :3] = T
 
-        C_2d = T @ C_combined_3d @ T.T
+        C_combined_6x6 = (
+            event.primary_covariance.matrix + event.secondary_covariance.matrix
+        )
+
+        C_2d = T_full @ C_combined_6x6 @ T_full.T
         b_vec_2d = T @ dr
 
         return BPlaneProjection(

@@ -14,8 +14,9 @@ from scipy.special import gammainc
 
 
 class PcMethod(str, Enum):
-    NUMERICAL = 'numerical'
-    FOSTER_SERIES = 'series'
+    NUMERICAL = "numerical"
+    FOSTER_SERIES = "series"
+
 
 class FosterPcCalculator:
     """
@@ -64,22 +65,25 @@ class FosterPcCalculator:
 
         result, _ = dblquad(
             integrand,
-            xi_lo, xi_hi,
+            xi_lo,
+            xi_hi,
             lambda xi: -self.integration_sigma * sigma_z,
             lambda xi: self.integration_sigma * sigma_z,
-            epsabs=1e-12, epsrel=1e-8,
+            epsabs=1e-12,
+            epsrel=1e-8,
         )
         return float(np.clip(result, 0.0, 1.0))
 
     def _foster_series(self, b: np.ndarray, C: np.ndarray) -> float:
         eigenvalues, _ = np.linalg.eigh(C)
-        lam1, lam2 = sorted(eigenvalues) # lam1=min, lam2=max
+        lam1, lam2 = sorted(eigenvalues)  # lam1=min, lam2=max
         if lam1 <= 0 or lam2 <= 0:
             return 0.0
 
         # u = 1/2 * b^T * C^-1 * b (Half of Mahalanobis distance squared)
         C_inv = np.linalg.inv(C)
         u = 0.5 * float(b @ C_inv @ b)
+        u = max(u, 1e-12)  # Clamp u to prevent log(0) and truncation at n=0
 
         # v = R^2 / (2 * sqrt(det(C)))
         # This parameter represents the scaled collision disk size
@@ -90,12 +94,10 @@ class FosterPcCalculator:
         # Iteratively calculate the Poisson-weighted sum of incomplete gamma terms
         for n in range(self.series_terms):
             from math import lgamma
-            if u > 0:
-                # Using log-space for numerical stability of (e^-u * u^n / n!)
-                log_weight = -u + n * np.log(u) - lgamma(n + 1)
-                weight = exp(log_weight)
-            else:
-                weight = 1.0 if n == 0 else 0.0
+
+            # Using log-space for numerical stability of (e^-u * u^n / n!)
+            log_weight = -u + n * np.log(u) - lgamma(n + 1)
+            weight = exp(log_weight)
 
             # gammainc(a, x) is the regularized lower incomplete gamma function
             gamma_term = gammainc(n + 1, v)

@@ -30,8 +30,6 @@ if [ ! -f "keys.env" ]; then
     echo ""
     echo "SPACETRACK_USER=$st_user" > "$INSTALL_DIR/keys.env"
     echo "SPACETRACK_PASS=$st_pass" >> "$INSTALL_DIR/keys.env"
-    # Also save a copy locally for the dev repo
-    cp "$INSTALL_DIR/keys.env" ./keys.env
 else
     cp keys.env "$INSTALL_DIR/keys.env"
 fi
@@ -40,7 +38,9 @@ fi
 echo -e "${BLUE}==>${NC} Linking global 'oure' command..."
 cat <<EOF > "$BIN_DIR/oure"
 #!/bin/bash
-export \$(grep -v '^#' "$INSTALL_DIR/keys.env" | xargs)
+set -o allexport
+source "$INSTALL_DIR/keys.env"
+set +o allexport
 "$INSTALL_DIR/venv/bin/oure" "\$@"
 EOF
 chmod +x "$BIN_DIR/oure"

@@ -15,6 +15,7 @@ from oure.core.models import StateVector
 
 logger = logging.getLogger("oure.uncertainty.stm")
 
+
 class STMCalculator:
     """
     Computes the 6×6 State Transition Matrix Φ(t, t₀) for covariance
@@ -37,11 +38,13 @@ class STMCalculator:
     def _two_body_stm(self, state: StateVector, dt: float) -> np.ndarray:
         r = state.r
         r_mag = np.linalg.norm(r)
-        g_matrix = constants.MU_KM3_S2 / r_mag**3 * (3 * np.outer(r, r) / r_mag**2 - np.eye(3))
+        g_matrix = (
+            constants.MU_KM3_S2 / r_mag**3 * (3 * np.outer(r, r) / r_mag**2 - np.eye(3))
+        )
         a_matrix = np.zeros((6, 6))
         a_matrix[:3, 3:] = np.eye(3)
         a_matrix[3:, :3] = g_matrix
-        return expm(a_matrix * dt)  # type: ignore
+        return expm(a_matrix * dt)
 
     def _j2_linearised_stm(self, state: StateVector, dt: float) -> np.ndarray:
         r = state.r
@@ -49,7 +52,13 @@ class STMCalculator:
         r_hat = r / r_mag
         z_r = r_hat[2]
 
-        coeff = -1.5 * constants.J2 * constants.MU_KM3_S2 * constants.R_EARTH_KM**2 / r_mag**5
+        coeff = (
+            -1.5
+            * constants.J2
+            * constants.MU_KM3_S2
+            * constants.R_EARTH_KM**2
+            / r_mag**5
+        )
         delta_g = np.zeros((3, 3))
         for i in range(3):
             for j in range(3):
@@ -62,14 +71,12 @@ class STMCalculator:
                 )
 
         g_2body = (
-            constants.MU_KM3_S2
-            / r_mag**3
-            * (3 * np.outer(r, r) / r_mag**2 - np.eye(3))
+            constants.MU_KM3_S2 / r_mag**3 * (3 * np.outer(r, r) / r_mag**2 - np.eye(3))
         )
         a_matrix = np.zeros((6, 6))
         a_matrix[:3, 3:] = np.eye(3)
         a_matrix[3:, :3] = g_2body + delta_g
-        return expm(a_matrix * dt)  # type: ignore
+        return expm(a_matrix * dt)
 
     def _numerical_stm(self, state: StateVector, dt: float) -> np.ndarray:
         """

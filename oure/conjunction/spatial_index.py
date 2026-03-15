@@ -22,7 +22,11 @@ class KDTreeSpatialIndex:
         Args:
             positions (np.ndarray): Array of shape (N, 3) of ECI positions in km.
         """
-        if not isinstance(positions, np.ndarray) or positions.ndim != 2 or positions.shape[1] != 3:
+        if (
+            not isinstance(positions, np.ndarray)
+            or positions.ndim != 2
+            or positions.shape[1] != 3
+        ):
             raise ValueError("Input 'positions' must be a NumPy array of shape (N, 3)")
         self._tree = KDTree(positions)
 
@@ -39,7 +43,9 @@ class KDTreeSpatialIndex:
         """
         return list(self._tree.query_ball_point(point, r=radius_km))
 
-    def query_k_nearest(self, point: np.ndarray, k: int) -> tuple[list[float], list[int]]:
+    def query_k_nearest(
+        self, point: np.ndarray, k: int
+    ) -> tuple[list[float], list[int]]:
         """
         Queries the index for the k-nearest neighbors to a point.
 
@@ -53,7 +59,9 @@ class KDTreeSpatialIndex:
             - A list of indices of the neighbors.
         """
         distances, indices = self._tree.query(point, k=k)
-        return distances.tolist(), indices.tolist()
+        if isinstance(distances, float):
+            return [distances], [int(indices)]
+        return distances.tolist(), indices.tolist()  # type: ignore
 
     @property
     def size(self) -> int:

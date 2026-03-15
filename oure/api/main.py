@@ -9,7 +9,12 @@ from oure.api.tasks import run_fleet_screening
 from oure.data.cdm_parser import CDMParser
 from oure.risk.calculator import RiskCalculator
 
-app = FastAPI(title="OURE API", version="1.0.0", description="Orbital Uncertainty & Risk Engine API")
+app = FastAPI(
+    title="OURE API",
+    version="1.0.0",
+    description="Orbital Uncertainty & Risk Engine API",
+)
+
 
 class RiskResponse(BaseModel):
     primary_id: str
@@ -20,20 +25,24 @@ class RiskResponse(BaseModel):
     miss_distance_km: float
     rel_velocity_km_s: float
 
+
 class TaskSubmitRequest(BaseModel):
     primary_id: str
     secondary_ids: list[str]
+
 
 @app.get("/health")
 def health_check() -> dict[str, str]:
     """Verify the API is running."""
     return {"status": "operational", "version": "1.0.0"}
 
+
 @app.post("/tasks/screen")
 def submit_screening_task(req: TaskSubmitRequest) -> dict[str, str]:
     """Submit a fleet screening job to the background Celery worker queue."""
     task = run_fleet_screening.delay(req.primary_id, req.secondary_ids)
     return {"task_id": str(task.id), "status": "submitted"}
+
 
 @app.get("/tasks/{task_id}")
 def get_task_status(task_id: str) -> dict[str, object]:
@@ -44,21 +53,24 @@ def get_task_status(task_id: str) -> dict[str, object]:
         "state": task_result.state,
     }
 
-    if task_result.state == 'PROGRESS':
+    if task_result.state == "PROGRESS":
         response["meta"] = task_result.info
-    elif task_result.state == 'SUCCESS':
+    elif task_result.state == "SUCCESS":
         response["result"] = task_result.result
-    elif task_result.state == 'FAILURE':
+    elif task_result.state == "FAILURE":
         response["error"] = str(task_result.info)
 
     return response
 
+
 @app.post("/analyze/cdm", response_model=RiskResponse)
-async def analyze_cdm(file: UploadFile = File(...), hard_body_radius: float = 20.0) -> RiskResponse:
+async def analyze_cdm(
+    file: UploadFile = File(...), hard_body_radius: float = 20.0
+) -> RiskResponse:
     """
     Upload a JSON CDM file and receive a risk assessment.
     """
-    if not file.filename or not file.filename.endswith('.json'):
+    if not file.filename or not file.filename.endswith(".json"):
         raise HTTPException(status_code=400, detail="Only JSON CDMs are supported.")
 
     try:
@@ -81,11 +93,17 @@ async def analyze_cdm(file: UploadFile = File(...), hard_body_radius: float = 20
                 pc=result.pc,
                 warning_level=result.warning_level,
                 miss_distance_km=result.conjunction.miss_distance_km,
-                rel_velocity_km_s=result.conjunction.relative_velocity_km_s
+                rel_velocity_km_s=result.conjunction.relative_velocity_km_s,
             )
         finally:
             # Cleanup ALWAYS
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing CDM: {str(e)}")
+    except Exception:
+        import logging
+
+        logging.getLogger("oure.api").exception("CDM processing failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to parse CDM file. Ensure it follows the CCSDS JSON schema.",
+        )

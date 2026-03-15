@@ -8,15 +8,17 @@ import numpy as np
 from oure.core import constants
 
 
-def rv2coe_vectorized(r: np.ndarray, v: np.ndarray, mu: float = constants.MU_KM3_S2) -> tuple[np.ndarray, ...]:
+def rv2coe_vectorized(
+    r: np.ndarray, v: np.ndarray, mu: float = constants.MU_KM3_S2
+) -> tuple[np.ndarray, ...]:
     """
     Converts state vectors to classical orbital elements, vectorized.
-    
+
     Args:
         r: Position vectors, shape (n, 3)
         v: Velocity vectors, shape (n, 3)
         mu: Standard gravitational parameter (km^3/s^2).
-    
+
     Returns:
         A tuple of numpy arrays (a, ecc, incl, raan, argp, nu)
     """
@@ -41,16 +43,64 @@ def rv2coe_vectorized(r: np.ndarray, v: np.ndarray, mu: float = constants.MU_KM3
     argp = np.zeros(len(r))
     mask_argp = (mag_n > 1e-15) & (ecc > 1e-15)
     if np.any(mask_argp):
-        dot_n_e = np.einsum('ij,ij->i', n_vec[mask_argp], e_vec[mask_argp])
-        argp[mask_argp] = np.arccos(np.clip(dot_n_e / (mag_n[mask_argp] * ecc[mask_argp]), -1.0, 1.0))
+        dot_n_e = np.einsum("ij,ij->i", n_vec[mask_argp], e_vec[mask_argp])
+        argp[mask_argp] = np.arccos(
+            np.clip(dot_n_e / (mag_n[mask_argp] * ecc[mask_argp]), -1.0, 1.0)
+        )
         argp[e_vec[:, 2] < 0] = 2 * np.pi - argp[e_vec[:, 2] < 0]
 
     nu = np.zeros(len(r))
     mask_nu = ecc > 1e-15
     if np.any(mask_nu):
-        dot_e_r = np.einsum('ij,ij->i', e_vec[mask_nu], r[mask_nu])
-        nu[mask_nu] = np.arccos(np.clip(dot_e_r / (ecc[mask_nu] * mag_r[mask_nu]), -1.0, 1.0))
-        nu[np.einsum('ij,ij->i', r, v) < 0] = 2 * np.pi - nu[np.einsum('ij,ij->i', r, v) < 0]
+        dot_e_r = np.einsum("ij,ij->i", e_vec[mask_nu], r[mask_nu])
+        nu[mask_nu] = np.arccos(
+            np.clip(dot_e_r / (ecc[mask_nu] * mag_r[mask_nu]), -1.0, 1.0)
+        )
+        nu[np.einsum("ij,ij->i", r, v) < 0] = (
+            2 * np.pi - nu[np.einsum("ij,ij->i", r, v) < 0]
+        )
 
     a = 1 / (2 / mag_r - mag_v**2 / mu)
     return a, ecc, incl, raan, argp, nu
+
+
+def coe2rv_vectorized(
+    a: np.ndarray,
+    ecc: np.ndarray,
+    incl: np.ndarray,
+    raan: np.ndarray,
+    argp: np.ndarray,
+    nu: np.ndarray,
+    mu: float = constants.MU_KM3_S2,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Converts classical orbital elements back to Cartesian state vectors, vectorized.
+    """
+    p = a * (1 - ecc**2)
+
+    r_pqw = np.zeros((len(a), 3))
+    r_pqw[:, 0] = p * np.cos(nu) / (1 + ecc * np.cos(nu))
+    r_pqw[:, 1] = p * np.sin(nu) / (1 + ecc * np.cos(nu))
+
+    v_pqw = np.zeros((len(a), 3))
+    v_pqw[:, 0] = -np.sqrt(mu / p) * np.sin(nu)
+    v_pqw[:, 1] = np.sqrt(mu / p) * (ecc + np.cos(nu))
+
+    c_O, s_O = np.cos(raan), np.sin(raan)
+    c_i, s_i = np.cos(incl), np.sin(incl)
+    c_w, s_w = np.cos(argp), np.sin(argp)
+
+    R = np.zeros((len(a), 3, 3))
+    R[:, 0, 0] = c_O * c_w - s_O * s_w * c_i
+    R[:, 0, 1] = -c_O * s_w - s_O * c_w * c_i
+    R[:, 0, 2] = s_O * s_i
+    R[:, 1, 0] = s_O * c_w + c_O * s_w * c_i
+    R[:, 1, 1] = -s_O * s_w + c_O * c_w * c_i
+    R[:, 1, 2] = -c_O * s_i
+    R[:, 2, 0] = s_w * s_i
+    R[:, 2, 1] = c_w * s_i
+    R[:, 2, 2] = c_i
+
+    r_eci = np.einsum("nij,nj->ni", R, r_pqw)
+    v_eci = np.einsum("nij,nj->ni", R, v_pqw)
+    return r_eci, v_eci

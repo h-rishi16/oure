@@ -20,10 +20,11 @@ from oure.risk.calculator import RiskCalculator
 
 logger = logging.getLogger("oure.risk.optimizer")
 
+
 class ManeuverOptimizer:
     """
     Uses Sequential Least Squares Programming (SLSQP) to find the minimum-fuel
-    maneuver that successfully lowers the Probability of Collision below a 
+    maneuver that successfully lowers the Probability of Collision below a
     specified safety threshold.
     """
 
@@ -36,7 +37,7 @@ class ManeuverOptimizer:
         secondary_cov: CovarianceMatrix,
         burn_epoch: datetime,
         target_pc: float = 1e-5,
-        hard_body_radius_m: float = 20.0
+        hard_body_radius_m: float = 20.0,
     ):
         self.base_prop = base_prop
         self.primary_state = primary_state
@@ -46,14 +47,19 @@ class ManeuverOptimizer:
         self.burn_epoch = burn_epoch
         self.target_pc = target_pc
 
-        self.tca_finder = TCARefinementEngine(tolerance_seconds=0.5) # Looser tolerance for speed during optimization
+        self.tca_finder = TCARefinementEngine(
+            tolerance_seconds=0.5
+        )  # Looser tolerance for speed during optimization
         self.risk_calc = RiskCalculator(hard_body_radius_m=hard_body_radius_m)
 
         # Find the nominal TCA to bound our search windows
         tca_res = self.tca_finder.find_tca(
-            self.primary_state, self.base_prop,
-            self.secondary_state, self.base_prop,
-            self.burn_epoch, self.burn_epoch + timedelta(hours=72)
+            self.primary_state,
+            self.base_prop,
+            self.secondary_state,
+            self.base_prop,
+            self.burn_epoch,
+            self.burn_epoch + timedelta(hours=72),
         )
         if not tca_res:
             raise ValueError("No baseline conjunction found in the look-ahead window.")
@@ -67,7 +73,9 @@ class ManeuverOptimizer:
         # Pre-propagate the secondary to the nominal TCA *once*.
         # The secondary is unaffected by our maneuver — its TCA state is constant.
         # Without this, it is re-propagated on every single SLSQP function evaluation.
-        s_tca_nominal = self.base_prop.propagate_to(self.secondary_state, self.nominal_tca)
+        s_tca_nominal = self.base_prop.propagate_to(
+            self.secondary_state, self.nominal_tca
+        )
 
         # Pre-propagate primary to burn epoch for the initial-guess velocity direction.
         burn_state = self.base_prop.propagate_to(self.primary_state, self.burn_epoch)
@@ -87,8 +95,10 @@ class ManeuverOptimizer:
             # Narrow search window to ±1h — find_tca now exits fast when no
             # minimum exists, so a tight window adds negligible overhead.
             tca_res = self.tca_finder.find_tca(
-                self.primary_state, man_prop,
-                self.secondary_state, self.base_prop,
+                self.primary_state,
+                man_prop,
+                self.secondary_state,
+                self.base_prop,
                 self.nominal_tca - timedelta(hours=1),
                 self.nominal_tca + timedelta(hours=1),
             )
@@ -126,17 +136,17 @@ class ManeuverOptimizer:
         x0 = v_hat * 1e-5  # 1 cm/s prograde initial guess
 
         bnds = [(-max_dv_km_s, max_dv_km_s)] * 3
-        cons = {'type': 'ineq', 'fun': constraint_pc}
+        cons = {"type": "ineq", "fun": constraint_pc}
 
         logger.info("Starting SLSQP maneuver optimization...")
         res = minimize(
-            objective,
-            x0,
-            method='SLSQP',
+            fun=objective,
+            x0=x0,
+            method="SLSQP",
             bounds=bnds,
             constraints=cons,
-            options={'disp': False, 'ftol': 1e-8, 'maxiter': 25},
-        )
+            options={"disp": False, "ftol": 1e-8, "maxiter": 25},
+        )  # type: ignore
 
         if res.success:
             optimal_dv = res.x
@@ -148,11 +158,11 @@ class ManeuverOptimizer:
                 "optimal_dv_km_s": optimal_dv,
                 "dv_mag_cm_s": np.linalg.norm(optimal_dv) * 100000.0,
                 "final_pc": final_pc,
-                "iterations": res.nit
+                "iterations": res.nit,
             }
         else:
             return {
                 "success": False,
                 "message": res.message,
-                "optimal_dv_km_s": np.zeros(3)
+                "optimal_dv_km_s": np.zeros(3),
             }

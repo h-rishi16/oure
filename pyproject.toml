@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-cov", "pytest-asyncio", "hypothesis", "ruff", "mypy", "pre-commit", "faker", "scipy-stubs", "pandas-stubs"]
+dev = ["pytest>=8", "pytest-cov", "pytest-asyncio", "hypothesis", "ruff", "mypy", "pre-commit", "faker", "scipy-stubs", "pandas-stubs", "types-requests"]
 web = ["fastapi>=0.100", "uvicorn>=0.20", "streamlit>=1.30", "python-multipart>=0.0.9", "celery>=5.3", "redis>=5.0"]
 
 [project.scripts]
@@ -44,10 +44,12 @@ ignore = ["ANN101","ANN102"]
 python_version = "3.11"
 strict = true
 ignore_missing_imports = true
+disallow_untyped_decorators = false
+disallow_any_generics = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=oure --cov-report=term-missing --cov-fail-under=80"
+addopts = "--cov=oure --cov-report=term-missing --cov-fail-under=88"
 filterwarnings = [
     "ignore:unclosed database",
 ]

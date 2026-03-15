@@ -15,6 +15,7 @@ def test_j2_corrector_vectorized(sample_tle, dummy_state):
     result = j2_prop.propagate_many_to(states, dummy_state.epoch, target_epoch)
     assert result.shape == (2, 6)
 
+
 def test_drag_corrector_vectorized(sample_tle, dummy_state):
     base_prop = SGP4Propagator(sample_tle)
     drag_prop = AtmosphericDragCorrector(base_prop)
@@ -25,11 +26,13 @@ def test_drag_corrector_vectorized(sample_tle, dummy_state):
     result = drag_prop.propagate_many_to(states, dummy_state.epoch, target_epoch)
     assert result.shape == (2, 6)
 
+
 def test_drag_corrector_set_flux(sample_tle):
     base_prop = SGP4Propagator(sample_tle)
     drag_prop = AtmosphericDragCorrector(base_prop)
     drag_prop.set_solar_flux(200.0)
-    assert drag_prop.f10_7 == 200.0
+    assert drag_prop._atmo.f10_7 == 200.0
+
 
 def test_base_propagate_sequence(sample_tle, dummy_state):
     base_prop = SGP4Propagator(sample_tle)
