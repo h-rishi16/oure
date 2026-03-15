@@ -48,13 +48,13 @@ class OUREContext:
 @click.option(
     "--st-username",
     envvar="SPACETRACK_USER",
-    required=True,
+    required=False,
     help="Space-Track.org username (or set $SPACETRACK_USER)",
 )
 @click.option(
     "--st-password",
     envvar="SPACETRACK_PASS",
-    required=True,
+    required=False,
     help="Space-Track.org password (or set $SPACETRACK_PASS)",
 )
 @click.option(
