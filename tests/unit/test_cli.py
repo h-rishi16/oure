@@ -19,9 +19,10 @@ def test_fetch_no_args(mock_context_class, runner):
     mock_ctx.flux_fetcher.fetch.return_value = []
     mock_ctx.tle_fetcher.fetch.return_value = []
 
-    with patch("oure.cli.cmd_fetch.UI", UI), patch(
-        "oure.cli.cmd_fetch.console"
-    ) as mock_console:
+    with (
+        patch("oure.cli.cmd_fetch.UI", UI),
+        patch("oure.cli.cmd_fetch.console") as mock_console,
+    ):
         result = runner.invoke(
             cli, ["--st-username", "u", "--st-password", "p", "fetch"]
         )
@@ -64,9 +65,10 @@ def test_cache_clear_tles(runner, tmp_path):
 def test_fetch_all_leo(mock_noaa, mock_spacetrack, runner):
     mock_noaa.return_value = []
     mock_spacetrack.return_value = []
-    with patch("oure.cli.cmd_fetch.UI", UI), patch(
-        "oure.cli.cmd_fetch.console"
-    ) as mock_console:
+    with (
+        patch("oure.cli.cmd_fetch.UI", UI),
+        patch("oure.cli.cmd_fetch.console") as mock_console,
+    ):
         result = runner.invoke(
             cli, ["--st-username", "u", "--st-password", "p", "fetch", "--all-leo"]
         )

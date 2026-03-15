@@ -2,6 +2,7 @@
 Tests for ManeuverOptimizer — uses mocked propagator and TCA finder
 so the SLSQP loop finishes in milliseconds.
 """
+
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 

@@ -50,14 +50,19 @@ class TCARefinementEngine:
         # --- Stage 1: fast coarse scan (8 samples) ---
         n_coarse = 8
         coarse_offsets = np.linspace(0.0, dt_span, n_coarse)
-        coarse_ranges = np.array([
-            self._range_at(
-                dt, search_start,
-                primary_state, primary_propagator,
-                secondary_state, secondary_propagator,
-            )
-            for dt in coarse_offsets
-        ])
+        coarse_ranges = np.array(
+            [
+                self._range_at(
+                    dt,
+                    search_start,
+                    primary_state,
+                    primary_propagator,
+                    secondary_state,
+                    secondary_propagator,
+                )
+                for dt in coarse_offsets
+            ]
+        )
 
         # --- Stage 2: bracket the minimum found in the coarse scan ---
         min_idx = int(np.argmin(coarse_ranges))
@@ -71,14 +76,20 @@ class TCARefinementEngine:
             d = a + self.GOLDEN_RATIO * (b - a)
 
             fc = self._range_at(
-                c, search_start,
-                primary_state, primary_propagator,
-                secondary_state, secondary_propagator,
+                c,
+                search_start,
+                primary_state,
+                primary_propagator,
+                secondary_state,
+                secondary_propagator,
             )
             fd = self._range_at(
-                d, search_start,
-                primary_state, primary_propagator,
-                secondary_state, secondary_propagator,
+                d,
+                search_start,
+                primary_state,
+                primary_propagator,
+                secondary_state,
+                secondary_propagator,
             )
 
             if fc < fd:
@@ -92,9 +103,12 @@ class TCARefinementEngine:
         tca_offset = (a + b) / 2.0
         tca_epoch = search_start + timedelta(seconds=tca_offset)
         miss_distance_km = self._range_at(
-            tca_offset, search_start,
-            primary_state, primary_propagator,
-            secondary_state, secondary_propagator,
+            tca_offset,
+            search_start,
+            primary_state,
+            primary_propagator,
+            secondary_state,
+            secondary_propagator,
         )
 
         if miss_distance_km > 10.0:
@@ -109,7 +123,7 @@ class TCARefinementEngine:
         p_state: StateVector,
         p_prop: BasePropagator,
         s_state: StateVector,
-        s_prop: BasePropagator
+        s_prop: BasePropagator,
     ) -> float:
         t = start_epoch + timedelta(seconds=dt_offset)
         rp = p_prop.propagate_to(p_state, t).r

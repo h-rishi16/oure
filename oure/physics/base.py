@@ -30,10 +30,14 @@ class BasePropagator(ABC):
         ...
 
     @abstractmethod
-    def propagate_many_to(self, states: np.ndarray, initial_epoch: datetime, target_epoch: datetime) -> np.ndarray:
+    def propagate_many_to(
+        self, states: np.ndarray, initial_epoch: datetime, target_epoch: datetime
+    ) -> np.ndarray:
         """Propagate a batch of states (N, 6) from initial_epoch to target_epoch."""
         ...
 
-    def propagate_sequence(self, state: StateVector, epochs: list[datetime]) -> list[StateVector]:
+    def propagate_sequence(
+        self, state: StateVector, epochs: list[datetime]
+    ) -> list[StateVector]:
         """Propagate to a list of epochs."""
         return [self.propagate_to(state, t) for t in epochs]

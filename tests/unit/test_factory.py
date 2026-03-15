@@ -10,6 +10,7 @@ def test_factory_build_all_layers(sample_tle):
     assert isinstance(prop._base, J2PerturbationCorrector)
     assert isinstance(prop._base._base, SGP4Propagator)
 
+
 def test_factory_build_sgp4_only(sample_tle):
     prop = PropagatorFactory.build(sample_tle, include_j2=False, include_drag=False)
     assert isinstance(prop, SGP4Propagator)

@@ -17,6 +17,7 @@ from .stm import STMCalculator
 
 logger = logging.getLogger("oure.uncertainty.covariance_propagator")
 
+
 class CovariancePropagator:
     """
     Propagates the 6×6 covariance matrix from t₀ to t using the STM:
@@ -25,7 +26,11 @@ class CovariancePropagator:
 
     DEFAULT_Q_SCALE = 1e-10  # km²/s³
 
-    def __init__(self, stm_calculator: STMCalculator | None = None, q_scale: float = DEFAULT_Q_SCALE):
+    def __init__(
+        self,
+        stm_calculator: STMCalculator | None = None,
+        q_scale: float = DEFAULT_Q_SCALE,
+    ):
         self.stm = stm_calculator or STMCalculator(fidelity=1)
         self.noise_model = ProcessNoiseModel(q_scale=q_scale)
 
@@ -51,8 +56,8 @@ class CovariancePropagator:
 
         logger.debug(
             f"Covariance propagated Δt={dt_seconds:.0f}s | "
-            f"σ_pos={np.sqrt(p_final[0,0]):.3f} km | "
-            f"σ_vel={np.sqrt(p_final[3,3])*1000:.3f} m/s"
+            f"σ_pos={np.sqrt(p_final[0, 0]):.3f} km | "
+            f"σ_vel={np.sqrt(p_final[3, 3]) * 1000:.3f} m/s"
         )
 
         return CovarianceMatrix(

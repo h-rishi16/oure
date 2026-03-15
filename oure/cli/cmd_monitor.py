@@ -16,14 +16,33 @@ from .utils import UI, console
 @cli.command()
 @click.option("--primary", "-p", required=True)
 @click.option("--secondaries-file", type=click.Path(exists=True), required=True)
-@click.option("--alert-threshold", default=1e-5, show_default=True,
-              help="Pc threshold to trigger RED alert (default: 1e-5)")
-@click.option("--interval", default=3600, show_default=True,
-              help="Re-evaluation interval in seconds (default: 1 hour)")
-@click.option("--max-runs", default=None, type=int,
-              help="Stop after N evaluations (omit for continuous)")
+@click.option(
+    "--alert-threshold",
+    default=1e-5,
+    show_default=True,
+    help="Pc threshold to trigger RED alert (default: 1e-5)",
+)
+@click.option(
+    "--interval",
+    default=3600,
+    show_default=True,
+    help="Re-evaluation interval in seconds (default: 1 hour)",
+)
+@click.option(
+    "--max-runs",
+    default=None,
+    type=int,
+    help="Stop after N evaluations (omit for continuous)",
+)
 @click.pass_context
-def monitor(ctx: click.Context, primary: str, secondaries_file: str, alert_threshold: float, interval: int, max_runs: int | None) -> None:
+def monitor(
+    ctx: click.Context,
+    primary: str,
+    secondaries_file: str,
+    alert_threshold: float,
+    interval: int,
+    max_runs: int | None,
+) -> None:
     """
     Continuous conjunction monitoring with configurable alert thresholds.
     """
@@ -49,7 +68,7 @@ def monitor(ctx: click.Context, primary: str, secondaries_file: str, alert_thres
                 screening_dist=5.0,
                 mc_samples=500,
                 hard_body_radius=20.0,
-                output=None
+                output=None,
             )
 
             if results:
@@ -60,9 +79,11 @@ def monitor(ctx: click.Context, primary: str, secondaries_file: str, alert_thres
                         tca=r.conjunction.tca,
                         pc=r.pc,
                         miss_distance_km=r.conjunction.miss_distance_km,
-                        warning_level=r.warning_level
+                        warning_level=r.warning_level,
                     )
-                console.print(f"   [success]DONE[/success] [dim]Logged {len(results)} events to risk history database.[/dim]")
+                console.print(
+                    f"   [success]DONE[/success] [dim]Logged {len(results)} events to risk history database.[/dim]"
+                )
 
             if max_runs and run_count >= max_runs:
                 UI.success("Max runs reached. Exiting monitor.")

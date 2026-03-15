@@ -27,7 +27,9 @@ class NOAASolarFluxFetcher(BaseDataFetcher):
     """
 
     FLUX_URL = "https://services.swpc.noaa.gov/products/summary/10cm-flux.json"
-    FLUX_ARCHIVE_URL = "https://services.swpc.noaa.gov/json/solar-geophysical-values.json"
+    FLUX_ARCHIVE_URL = (
+        "https://services.swpc.noaa.gov/json/solar-geophysical-values.json"
+    )
 
     def __init__(self, cache: CacheManager | None = None):
         self.cache = cache or CacheManager()
@@ -67,16 +69,20 @@ class NOAASolarFluxFetcher(BaseDataFetcher):
                     arch_data = arch_resp.json()
                     if arch_data and len(arch_data) > 0:
                         latest = arch_data[-1]
-                        f10_7_81day_avg = float(latest.get("f107_81day_avg", result.f10_7))
+                        f10_7_81day_avg = float(
+                            latest.get("f107_81day_avg", result.f10_7)
+                        )
                         ap_index = float(latest.get("ap_index", 15.0))
                 except Exception as e:
-                    logger.warning(f"Failed to fetch NOAA archive data: {e}. Using defaults.")
+                    logger.warning(
+                        f"Failed to fetch NOAA archive data: {e}. Using defaults."
+                    )
 
                 final_result = SolarFluxData(
                     date=result.date,
                     f10_7=result.f10_7,
                     f10_7_81day_avg=f10_7_81day_avg,
-                    ap_index=ap_index
+                    ap_index=ap_index,
                 )
 
                 logger.info(f"Solar flux F10.7={final_result.f10_7} fetched from NOAA")

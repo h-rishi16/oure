@@ -17,6 +17,7 @@ from .sgp4_propagator import SGP4Propagator
 
 logger = logging.getLogger("oure.physics.factory")
 
+
 class PropagatorFactory:
     """
     Assembles the layered propagator chain from a TLE + space weather context.
@@ -43,8 +44,7 @@ class PropagatorFactory:
 
         if include_drag:
             chain = AtmosphericDragCorrector(
-                chain, cd=cd, area_m2=area_m2,
-                mass_kg=mass_kg, solar_flux=solar_flux
+                chain, cd=cd, area_m2=area_m2, mass_kg=mass_kg, solar_flux=solar_flux
             )
             logger.debug(f"Atmospheric drag layer enabled (F10.7={solar_flux})")
 

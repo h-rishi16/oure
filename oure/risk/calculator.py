@@ -38,7 +38,7 @@ class RiskCalculator:
                 b_plane_sigma_x=0.0,
                 b_plane_sigma_z=0.0,
                 hard_body_radius_m=self.hard_body_radius_km * 1000.0,
-                method="SKIPPED_SINGULAR"
+                method="SKIPPED_SINGULAR",
             )
 
         projection = self.bplane_projector.project(event)
@@ -57,7 +57,7 @@ class RiskCalculator:
             hard_body_radius_m=self.hard_body_radius_km * 1000,
             b_plane_sigma_x=sigma_x,
             b_plane_sigma_z=sigma_z,
-            method=self.pc_calculator.method.value
+            method=self.pc_calculator.method.value,
         )
 
         result.warning_level = alert.classify(result)

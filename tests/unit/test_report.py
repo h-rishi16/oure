@@ -17,7 +17,7 @@ def sample_results_json(tmp_path: Path) -> Path:
             "pc": 2.14e-04,
             "warning_level": "YELLOW",
             "miss_distance_km": 0.183,
-            "rel_velocity_km_s": 12.34
+            "rel_velocity_km_s": 12.34,
         },
         {
             "primary_id": "25544",
@@ -26,23 +26,30 @@ def sample_results_json(tmp_path: Path) -> Path:
             "pc": 8.32e-07,
             "warning_level": "GREEN",
             "miss_distance_km": 1.041,
-            "rel_velocity_km_s": 10.5
-        }
+            "rel_velocity_km_s": 10.5,
+        },
     ]
     file_path = tmp_path / "test_results.json"
     with open(file_path, "w") as f:
         json.dump(data, f)
     return file_path
 
+
 def test_report_command_pdf(sample_results_json, tmp_path):
     runner = CliRunner()
     output_pdf = tmp_path / "report.pdf"
 
-    result = runner.invoke(report, [
-        "--results-file", str(sample_results_json),
-        "--format", "pdf",
-        "--output", str(output_pdf)
-    ])
+    result = runner.invoke(
+        report,
+        [
+            "--results-file",
+            str(sample_results_json),
+            "--format",
+            "pdf",
+            "--output",
+            str(output_pdf),
+        ],
+    )
 
     assert result.exit_code == 0
     assert "PDF report generated successfully" in result.output

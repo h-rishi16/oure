@@ -38,7 +38,7 @@ class CDMParser:
         v_rel = body.get("RELATIVE_SPEED", 0.0)
 
         def _parse_state_cov(
-            segment: dict[str, Any]
+            segment: dict[str, Any],
         ) -> tuple[str, StateVector, CovarianceMatrix]:
             meta = segment.get("metadata", {})
             data_sec = segment.get("data", {})

@@ -23,6 +23,7 @@ class TLERecordSchema(BaseModel):
     MEAN_MOTION: float
     BSTAR: float
 
+
 class SolarFluxSchema(BaseModel):
     Flux: float
     TimeStamp: datetime

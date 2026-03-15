@@ -36,6 +36,7 @@ _RETRY_POLICY = retry(
     reraise=True,
 )
 
+
 class SpaceTrackFetcher(BaseDataFetcher):
     """
     Authenticates with Space-Track.org and downloads TLE data concurrently.
@@ -54,7 +55,7 @@ class SpaceTrackFetcher(BaseDataFetcher):
         username: str,
         password: str,
         cache: CacheManager | None = None,
-        cache_ttl_hours: float = 6.0
+        cache_ttl_hours: float = 6.0,
     ):
         self.username = username
         self.password = password
@@ -63,14 +64,17 @@ class SpaceTrackFetcher(BaseDataFetcher):
 
     async def _async_login(self, client: httpx.AsyncClient) -> None:
         from oure.core.exceptions import SpaceTrackAuthError
+
         resp = await client.post(
             self.LOGIN_URL,
             data={"identity": self.username, "password": self.password},
-            timeout=30.0
+            timeout=30.0,
         )
         resp.raise_for_status()
         if "Failed" in resp.text:
-            raise SpaceTrackAuthError("Space-Track authentication failed. Check credentials.")
+            raise SpaceTrackAuthError(
+                "Space-Track authentication failed. Check credentials."
+            )
         logger.info("Authenticated with Space-Track.org")
 
     async def _async_logout(self, client: httpx.AsyncClient) -> None:
@@ -93,7 +97,9 @@ class SpaceTrackFetcher(BaseDataFetcher):
                 missing = sat_ids
 
             if missing:
-                logger.info(f"Cache MISS for {len(missing)} satellites — fetching network asynchronously")
+                logger.info(
+                    f"Cache MISS for {len(missing)} satellites — fetching network asynchronously"
+                )
                 fresh = self._fetch_from_network(sat_ids=missing)
                 results.extend(fresh)
             return results
@@ -107,11 +113,15 @@ class SpaceTrackFetcher(BaseDataFetcher):
             self.cache.set(cache_key, "fresh", self.cache_ttl)
             return records
 
-    def _fetch_from_network(self, sat_ids: list[str] | None = None, **kwargs: Any) -> list[TLERecord]:
+    def _fetch_from_network(
+        self, sat_ids: list[str] | None = None, **kwargs: Any
+    ) -> list[TLERecord]:
         return asyncio.run(self._fetch_all_async(sat_ids))
 
     @_RETRY_POLICY
-    async def _fetch_chunk(self, client: httpx.AsyncClient, chunk: list[str]) -> list[dict[str, Any]]:
+    async def _fetch_chunk(
+        self, client: httpx.AsyncClient, chunk: list[str]
+    ) -> list[dict[str, Any]]:
         ids_str = ",".join(chunk)
         url = (
             f"{self.BASE_URL}/basicspacedata/query/class/tle_latest"
@@ -122,7 +132,9 @@ class SpaceTrackFetcher(BaseDataFetcher):
         data: list[dict[str, Any]] = resp.json()
         return data
 
-    async def _fetch_all_async(self, sat_ids: list[str] | None = None) -> list[TLERecord]:
+    async def _fetch_all_async(
+        self, sat_ids: list[str] | None = None
+    ) -> list[TLERecord]:
         raw_data: list[dict[str, Any]] = []
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
@@ -133,7 +145,10 @@ class SpaceTrackFetcher(BaseDataFetcher):
                         resp.raise_for_status()
                         raw_data = resp.json()
                     else:
-                        chunks = [sat_ids[i:i + self.CHUNK_SIZE] for i in range(0, len(sat_ids), self.CHUNK_SIZE)]
+                        chunks = [
+                            sat_ids[i : i + self.CHUNK_SIZE]
+                            for i in range(0, len(sat_ids), self.CHUNK_SIZE)
+                        ]
                         tasks = [self._fetch_chunk(client, chunk) for chunk in chunks]
                         chunk_results = await asyncio.gather(*tasks)
                         for r in chunk_results:
@@ -141,14 +156,18 @@ class SpaceTrackFetcher(BaseDataFetcher):
                 finally:
                     await self._async_logout(client)
         except Exception as e:
-            logger.warning(f"Network error fetching from Space-Track: {e}. Generating Mock TLEs.")
+            logger.warning(
+                f"Network error fetching from Space-Track: {e}. Generating Mock TLEs."
+            )
             return self._generate_mock_tles(sat_ids)
 
         parsed_records: list[TLERecord] = []
         for d in raw_data:
             try:
                 valid_data = TLERecordSchema(**d)
-                parsed_records.append(self._parse_tle_record(valid_data.model_dump(mode='json')))
+                parsed_records.append(
+                    self._parse_tle_record(valid_data.model_dump(mode="json"))
+                )
             except Exception as e:
                 logger.warning(f"Failed to validate TLE record: {e}")
                 continue
@@ -165,26 +184,30 @@ class SpaceTrackFetcher(BaseDataFetcher):
         mock_count = len(sat_ids) if (sat_ids and len(sat_ids) > 0) else 50
         for i in range(mock_count):
             sid = str(base_id + i) if not sat_ids else sat_ids[i]
-            mock_records.append(TLERecord(
-                sat_id=sid,
-                name=f"MOCK-SAT-{sid}",
-                line1=f"1 {sid}U 23001A   23284.00000000  .00000000  00000-0  00000-0 0  9999",
-                line2=f"2 {sid}  {random.uniform(0, 180):.4f} {random.uniform(0, 360):.4f} 0005000 {random.uniform(0, 360):.4f} {random.uniform(0, 360):.4f} {random.uniform(14, 16):.8f}",
-                epoch=datetime.now(UTC) - timedelta(days=random.uniform(0, 1)),
-                inclination_deg=random.uniform(0, 180),
-                raan_deg=random.uniform(0, 360),
-                eccentricity=0.0005,
-                arg_perigee_deg=random.uniform(0, 360),
-                mean_anomaly_deg=random.uniform(0, 360),
-                mean_motion_rev_per_day=random.uniform(14.0, 16.0),
-                bstar=0.0
-            ))
+            mock_records.append(
+                TLERecord(
+                    sat_id=sid,
+                    name=f"MOCK-SAT-{sid}",
+                    line1=f"1 {sid}U 23001A   23284.00000000  .00000000  00000-0  00000-0 0  9999",
+                    line2=f"2 {sid}  {random.uniform(0, 180):.4f} {random.uniform(0, 360):.4f} 0005000 {random.uniform(0, 360):.4f} {random.uniform(0, 360):.4f} {random.uniform(14, 16):.8f}",
+                    epoch=datetime.now(UTC) - timedelta(days=random.uniform(0, 1)),
+                    inclination_deg=random.uniform(0, 180),
+                    raan_deg=random.uniform(0, 360),
+                    eccentricity=0.0005,
+                    arg_perigee_deg=random.uniform(0, 360),
+                    mean_anomaly_deg=random.uniform(0, 360),
+                    mean_motion_rev_per_day=random.uniform(14.0, 16.0),
+                    bstar=0.0,
+                )
+            )
         return mock_records
 
     def _parse_tle_record(self, data: dict[str, Any]) -> TLERecord:
         epoch_str = data.get("EPOCH", "")
         try:
-            epoch = datetime.strptime(epoch_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+            epoch = datetime.strptime(epoch_str, "%Y-%m-%d %H:%M:%S").replace(
+                tzinfo=UTC
+            )
         except ValueError:
             epoch = datetime.now(UTC)
 

@@ -8,7 +8,9 @@ import numpy as np
 from oure.core.exceptions import KeplerConvergenceError
 
 
-def solve_kepler_vectorized(M: np.ndarray, e: np.ndarray, tol: float = 1e-12, max_iter: int = 50) -> np.ndarray:
+def solve_kepler_vectorized(
+    M: np.ndarray, e: np.ndarray, tol: float = 1e-12, max_iter: int = 50
+) -> np.ndarray:
     """
     Solves Kepler's equation M = E - e*sin(E) for the eccentric anomaly E,
     using the Newton-Raphson method in a vectorized manner.
@@ -21,7 +23,7 @@ def solve_kepler_vectorized(M: np.ndarray, e: np.ndarray, tol: float = 1e-12, ma
 
     Returns:
         Eccentric anomaly E in radians.
-        
+
     Raises:
         KeplerConvergenceError: If the solver fails to converge.
     """
@@ -39,4 +41,6 @@ def solve_kepler_vectorized(M: np.ndarray, e: np.ndarray, tol: float = 1e-12, ma
         if np.all(np.abs(delta_E) < tol):
             return E
 
-    raise KeplerConvergenceError(f"Kepler solver did not converge after {max_iter} iterations.")
+    raise KeplerConvergenceError(
+        f"Kepler solver did not converge after {max_iter} iterations."
+    )

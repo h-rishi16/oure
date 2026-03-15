@@ -21,7 +21,7 @@ def _approx_altitude(mean_motion_rev_day: float) -> float:
 
     n = mean_motion_rev_day * constants.TWO_PI / constants.SECONDS_PER_DAY
     a = (constants.MU_KM3_S2 / n**2) ** (1 / 3) if n > 0 else constants.R_EARTH_KM + 400
-    return a - constants.R_EARTH_KM
+    return float(a - constants.R_EARTH_KM)
 
 
 def _save_tles_to_json(records: list[Any], path: Path) -> None:
@@ -128,7 +128,7 @@ def fetch(
     console.print(table)
 
     if len(records) > 10:
-        console.print(f"[dim]... and {len(records)-10} more satellites hidden.[/dim]")
+        console.print(f"[dim]... and {len(records) - 10} more satellites hidden.[/dim]")
 
     if output:
         _save_tles_to_json(records, Path(output))

@@ -10,8 +10,9 @@ from oure.data.spacetrack import SpaceTrackFetcher
 def cache_manager(tmp_path):
     return CacheManager(db_path=tmp_path / "test_cache.db")
 
+
 @pytest.mark.asyncio
-@patch('httpx.AsyncClient')
+@patch("httpx.AsyncClient")
 async def test_spacetrack_fetcher_login_success(mock_client_class, cache_manager):
     mock_client = AsyncMock()
     mock_post_response = MagicMock()
@@ -21,16 +22,19 @@ async def test_spacetrack_fetcher_login_success(mock_client_class, cache_manager
 
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    fetcher = SpaceTrackFetcher(username="test", password="password", cache=cache_manager)
+    fetcher = SpaceTrackFetcher(
+        username="test", password="password", cache=cache_manager
+    )
     await fetcher._async_login(mock_client)
 
     mock_client.post.assert_called_once_with(
         fetcher.LOGIN_URL,
         data={"identity": "test", "password": "password"},
-        timeout=30.0
+        timeout=30.0,
     )
 
-@patch('httpx.AsyncClient')
+
+@patch("httpx.AsyncClient")
 def test_spacetrack_fetcher_fetch_from_network(mock_client_class, cache_manager):
     mock_client = AsyncMock()
 
@@ -52,13 +56,15 @@ def test_spacetrack_fetcher_fetch_from_network(mock_client_class, cache_manager)
             "ARG_OF_PERICENTER": 329.8058,
             "MEAN_ANOMALY": 116.7325,
             "MEAN_MOTION": 15.50379301,
-            "BSTAR": 0.00016715
+            "BSTAR": 0.00016715,
         }
     ]
     mock_client.get.return_value = mock_get_response
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    fetcher = SpaceTrackFetcher(username="test", password="password", cache=cache_manager)
+    fetcher = SpaceTrackFetcher(
+        username="test", password="password", cache=cache_manager
+    )
     records = fetcher._fetch_from_network(sat_ids=["25544"])
 
     assert len(records) == 1
@@ -66,9 +72,12 @@ def test_spacetrack_fetcher_fetch_from_network(mock_client_class, cache_manager)
     # Expect 2 calls: one for the TLE data, one for logout
     assert mock_client.get.call_count == 2
 
-@patch('httpx.AsyncClient')
+
+@patch("httpx.AsyncClient")
 def test_spacetrack_fetcher_cache_logic(mock_client_class, cache_manager):
-    fetcher = SpaceTrackFetcher(username="test", password="password", cache=cache_manager)
+    fetcher = SpaceTrackFetcher(
+        username="test", password="password", cache=cache_manager
+    )
 
     mock_client = AsyncMock()
     mock_post_response = MagicMock()
@@ -89,7 +98,7 @@ def test_spacetrack_fetcher_cache_logic(mock_client_class, cache_manager):
             "ARG_OF_PERICENTER": 0.0,
             "MEAN_ANOMALY": 0.0,
             "MEAN_MOTION": 0.0,
-            "BSTAR": 0.0
+            "BSTAR": 0.0,
         }
     ]
     mock_client.get.return_value = mock_get_response

@@ -17,14 +17,17 @@ from oure.physics.base import BasePropagator
 
 logger = logging.getLogger("oure.uncertainty.monte_carlo")
 
+
 @dataclass
 class MonteCarloResult:
     """Container for a completed Monte Carlo run."""
+
     nominal_state: StateVector
     ghost_states: list[StateVector]
     sample_covariance: np.ndarray
     n_samples: int
     outlier_fraction: float
+
 
 class MonteCarloUncertaintyPropagator:
     """
@@ -37,7 +40,7 @@ class MonteCarloUncertaintyPropagator:
         self,
         propagator: BasePropagator,
         n_samples: int = 1000,
-        random_seed: int | None = 42
+        random_seed: int | None = 42,
     ):
         self.propagator = propagator
         self.n_samples = n_samples
@@ -47,7 +50,7 @@ class MonteCarloUncertaintyPropagator:
         self,
         initial_state: StateVector,
         initial_covariance: CovarianceMatrix,
-        target_epoch: datetime
+        target_epoch: datetime,
     ) -> MonteCarloResult:
         """
         Execute Monte Carlo propagation.
@@ -71,7 +74,9 @@ class MonteCarloUncertaintyPropagator:
         perturbations = (l_matrix @ xi.T).T
         samples_x0 = x0 + perturbations
 
-        logger.info(f"Propagating {self.n_samples} Monte Carlo samples to {target_epoch}")
+        logger.info(
+            f"Propagating {self.n_samples} Monte Carlo samples to {target_epoch}"
+        )
 
         # Vectorized propagation
         ghost_vecs = self.propagator.propagate_many_to(
@@ -106,7 +111,7 @@ class MonteCarloUncertaintyPropagator:
 
         logger.info(
             f"MC complete | outlier_frac={outlier_frac:.2%} | "
-            f"σ_along-track≈{np.sqrt(p_mc[1,1]):.3f} km"
+            f"σ_along-track≈{np.sqrt(p_mc[1, 1]):.3f} km"
         )
 
         return MonteCarloResult(

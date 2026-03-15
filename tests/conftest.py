@@ -13,10 +13,12 @@ def db_path(tmp_path: Path) -> Path:
     """Provides a path to a temporary database file."""
     return tmp_path / "test_cache.db"
 
+
 @pytest.fixture
 def cache_manager(db_path: Path) -> CacheManager:
     """Provides a CacheManager instance with a temporary database."""
     return CacheManager(db_path=db_path)
+
 
 @pytest.fixture
 def dummy_state() -> StateVector:
@@ -25,8 +27,9 @@ def dummy_state() -> StateVector:
         r=np.array([7000.0, 0.0, 0.0]),
         v=np.array([0.0, 7.5, 0.0]),
         epoch=datetime.now(UTC),
-        sat_id="12345"
+        sat_id="12345",
     )
+
 
 @pytest.fixture
 def dummy_state_primary() -> StateVector:
@@ -35,8 +38,9 @@ def dummy_state_primary() -> StateVector:
         r=np.array([7000.0, 0.0, 0.0]),
         v=np.array([0.0, 7.5, 0.0]),
         epoch=datetime.now(UTC),
-        sat_id="1"
+        sat_id="1",
     )
+
 
 @pytest.fixture
 def dummy_state_secondary() -> StateVector:
@@ -45,8 +49,9 @@ def dummy_state_secondary() -> StateVector:
         r=np.array([7001.0, 0.0, 0.0]),
         v=np.array([0.0, 7.4, 0.1]),
         epoch=datetime.now(UTC),
-        sat_id="2"
+        sat_id="2",
     )
+
 
 @pytest.fixture
 def sample_tle() -> TLERecord:
@@ -63,5 +68,5 @@ def sample_tle() -> TLERecord:
         arg_perigee_deg=329.8058,
         mean_anomaly_deg=116.7325,
         mean_motion_rev_per_day=15.50379301,
-        bstar=0.00016715
+        bstar=0.00016715,
     )

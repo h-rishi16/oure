@@ -44,7 +44,7 @@ class STMCalculator:
         a_matrix = np.zeros((6, 6))
         a_matrix[:3, 3:] = np.eye(3)
         a_matrix[3:, :3] = g_matrix
-        return expm(a_matrix * dt)
+        return expm(a_matrix * dt)  # type: ignore
 
     def _j2_linearised_stm(self, state: StateVector, dt: float) -> np.ndarray:
         r = state.r
@@ -76,7 +76,7 @@ class STMCalculator:
         a_matrix = np.zeros((6, 6))
         a_matrix[:3, 3:] = np.eye(3)
         a_matrix[3:, :3] = g_2body + delta_g
-        return expm(a_matrix * dt)
+        return expm(a_matrix * dt)  # type: ignore
 
     def _numerical_stm(self, state: StateVector, dt: float) -> np.ndarray:
         """

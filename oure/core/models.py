@@ -19,6 +19,7 @@ from . import constants
 # Orbital State Representation
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class StateVector:
     """
@@ -30,6 +31,7 @@ class StateVector:
         epoch (datetime): UTC epoch for the state.
         sat_id (str): NORAD catalog ID string.
     """
+
     r: np.ndarray
     v: np.ndarray
     epoch: datetime
@@ -42,8 +44,8 @@ class StateVector:
             raise TypeError("Velocity vector 'v' must be a NumPy array of shape (3,)")
 
         # Use object.__setattr__ because the class is frozen
-        object.__setattr__(self, 'r', self.r.astype(np.float64))
-        object.__setattr__(self, 'v', self.v.astype(np.float64))
+        object.__setattr__(self, "r", self.r.astype(np.float64))
+        object.__setattr__(self, "v", self.v.astype(np.float64))
 
     @property
     def speed_km_s(self) -> float:
@@ -68,7 +70,9 @@ class StateVector:
     @property
     def orbital_energy(self) -> float:
         """Calculates the specific orbital energy in km²/s²."""
-        return float((self.speed_km_s**2 / 2) - (constants.MU_KM3_S2 / np.linalg.norm(self.r)))
+        return float(
+            (self.speed_km_s**2 / 2) - (constants.MU_KM3_S2 / np.linalg.norm(self.r))
+        )
 
     @classmethod
     def from_6d(cls, vec: np.ndarray, epoch: datetime, sat_id: str) -> StateVector:
@@ -105,6 +109,7 @@ class TLERecord:
     """
     Raw Two-Line Element set as fetched from Space-Track.
     """
+
     sat_id: str
     name: str
     line1: str
@@ -125,6 +130,7 @@ class CovarianceMatrix:
     """
     6×6 position-velocity covariance in ECI frame.
     """
+
     matrix: np.ndarray
     epoch: datetime
     sat_id: str
@@ -158,6 +164,7 @@ class CovarianceMatrix:
 @dataclass(frozen=True)
 class SolarFluxData:
     """F10.7 solar flux index."""
+
     date: datetime
     f10_7: float
     f10_7_81day_avg: float
@@ -167,6 +174,7 @@ class SolarFluxData:
 @dataclass(frozen=True)
 class AtmosphereParams:
     """Instantaneous atmosphere model parameters."""
+
     f10_7: float
     ap_index: float
     rho_ref: float
@@ -178,6 +186,7 @@ class ConjunctionEvent:
     """
     A predicted close approach between two satellites.
     """
+
     primary_id: str
     secondary_id: str
     tca: datetime
@@ -192,6 +201,7 @@ class ConjunctionEvent:
 @dataclass
 class BPlaneProjection:
     """B-plane coordinate system and projected covariance."""
+
     xi_hat: np.ndarray
     zeta_hat: np.ndarray
     T_matrix: np.ndarray
@@ -202,6 +212,7 @@ class BPlaneProjection:
 @dataclass
 class RiskResult:
     """Final output of the Pc calculation pipeline."""
+
     conjunction: ConjunctionEvent
     pc: float
     combined_covariance: np.ndarray
@@ -213,11 +224,10 @@ class RiskResult:
     monte_carlo_samples: int = 0
 
 
-
-
 @dataclass(frozen=True)
 class CacheEntry:
     """Represents a record in the SQLite key-value cache."""
+
     key: str
     value_json: str
     fetched_at: datetime
@@ -227,6 +237,7 @@ class CacheEntry:
 @dataclass
 class PipelineConfig:
     """Runtime configuration bundle for an analysis pipeline."""
+
     mc_samples: int = 1000
     screening_km: float = 5.0
     hbr_m: float = 20.0

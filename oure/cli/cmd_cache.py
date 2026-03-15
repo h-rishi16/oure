@@ -32,7 +32,9 @@ def cache(ctx: click.Context, status: bool, clear: bool, clear_tles: bool) -> No
         with sqlite3.connect(db_path) as conn:
             try:
                 n_tles = conn.execute("SELECT COUNT(*) FROM tle_records").fetchone()[0]
-                n_cache = conn.execute("SELECT COUNT(*) FROM cache_entries").fetchone()[0]
+                n_cache = conn.execute("SELECT COUNT(*) FROM cache_entries").fetchone()[
+                    0
+                ]
                 n_risk = conn.execute("SELECT COUNT(*) FROM risk_history").fetchone()[0]
                 db_size = db_path.stat().st_size / 1024
             except sqlite3.OperationalError as e:
@@ -40,6 +42,7 @@ def cache(ctx: click.Context, status: bool, clear: bool, clear_tles: bool) -> No
                 return
 
         from rich.table import Table
+
         table = Table(title="Database Statistics", box=None)
         table.add_column("Category", style="info")
         table.add_column("Count / Size", justify="right", style="success")
@@ -51,7 +54,10 @@ def cache(ctx: click.Context, status: bool, clear: bool, clear_tles: bool) -> No
         console.print(table)
 
     elif clear:
-        if click.confirm("WARNING: [danger]This will delete ALL cached data and risk logs. Continue?[/danger]", default=False):
+        if click.confirm(
+            "WARNING: [danger]This will delete ALL cached data and risk logs. Continue?[/danger]",
+            default=False,
+        ):
             with sqlite3.connect(db_path) as conn:
                 conn.execute("DELETE FROM tle_records")
                 conn.execute("DELETE FROM cache_entries")
@@ -59,7 +65,9 @@ def cache(ctx: click.Context, status: bool, clear: bool, clear_tles: bool) -> No
             UI.success("All cache and history tables cleared.")
 
     elif clear_tles:
-        if click.confirm("WARNING: [warning]Delete all TLE records?[/warning]", default=False):
+        if click.confirm(
+            "WARNING: [warning]Delete all TLE records?[/warning]", default=False
+        ):
             with sqlite3.connect(db_path) as conn:
                 conn.execute("DELETE FROM tle_records")
             UI.success("TLE records cleared.")
