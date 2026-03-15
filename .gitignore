@@ -36,3 +36,5 @@ build/
 *.pdf
 results.json
 mock_results.json
+risk_history.html
+risk_history.html
