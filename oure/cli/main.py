@@ -113,6 +113,20 @@ def install_completion(append: bool | None, shell: str | None) -> None:
 
 
 # Import commands to register them with the CLI group
+from . import (
+    cmd_analyze,
+    cmd_avoid,
+    cmd_cache,
+    cmd_cdm,
+    cmd_fetch,
+    cmd_fleet,
+    cmd_history,
+    cmd_monitor,
+    cmd_plot,
+    cmd_report,
+    cmd_sensor,
+    cmd_shatter,
+)
 
 if __name__ == "__main__":
     cli(auto_envvar_prefix="OURE")
