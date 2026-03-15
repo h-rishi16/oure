@@ -54,6 +54,10 @@ def avoid(
         primary = Prompt.ask("[info]Enter Primary NORAD ID[/info]")
     if not secondary:
         secondary = Prompt.ask("[info]Enter Secondary NORAD ID[/info]")
+
+    assert primary is not None
+    assert secondary is not None
+
     if burn_time_before_tca is None:
         burn_time_before_tca = float(
             Prompt.ask("[info]Hours before TCA to execute burn?[/info]", default="12.0")

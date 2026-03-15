@@ -113,7 +113,7 @@ def install_completion(append: bool | None, shell: str | None) -> None:
 
 
 # Import commands to register them with the CLI group
-from . import (
+from . import (  # noqa: F401
     cmd_analyze,
     cmd_avoid,
     cmd_cache,
