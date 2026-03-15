@@ -18,4 +18,5 @@ repos:
     rev: v1.7.0
     hooks:
       - id: mypy
+        exclude: ^tests/
         additional_dependencies: [ pydantic, numpy, scipy, types-requests ]

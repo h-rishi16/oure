@@ -146,7 +146,7 @@ class ManeuverOptimizer:
             bounds=bnds,
             constraints=cons,
             options={"disp": False, "ftol": 1e-8, "maxiter": 25},
-        )  # type: ignore
+        )
 
         if res.success:
             optimal_dv = res.x

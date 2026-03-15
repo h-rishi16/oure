@@ -2,14 +2,13 @@
 Tests for ManeuverOptimizer — uses mocked propagator and TCA finder
 so the SLSQP loop finishes in milliseconds.
 """
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
 from oure.core.models import (
-    ConjunctionEvent,
     CovarianceMatrix,
     RiskResult,
     StateVector,
@@ -20,7 +19,7 @@ from oure.risk.optimizer import ManeuverOptimizer
 
 @pytest.fixture
 def base_states():
-    epoch = datetime.now(timezone.utc)
+    epoch = datetime.now(UTC)
     primary = StateVector(
         r=np.array([7000.0, 0.0, 0.0]),
         v=np.array([0.0, 7.5, 0.0]),

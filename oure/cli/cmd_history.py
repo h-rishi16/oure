@@ -3,7 +3,6 @@ OURE CLI - History Command (Risk Evolution)
 ===========================================
 """
 
-import sys
 from pathlib import Path
 from typing import Any, cast
 
@@ -14,22 +13,38 @@ from rich.table import Table
 from .main import OUREContext, cli
 from .utils import UI, console
 
+
 @cli.command()
-@click.option("--primary", "-p", required=True, help="NORAD ID of the primary satellite.")
-@click.option("--secondary", "-s", required=True, help="NORAD ID of the secondary satellite.")
-@click.option("--output", "-o", type=click.Path(), default="risk_history.html", help="Output HTML file path.")
+@click.option(
+    "--primary", "-p", required=True, help="NORAD ID of the primary satellite."
+)
+@click.option(
+    "--secondary", "-s", required=True, help="NORAD ID of the secondary satellite."
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    default="risk_history.html",
+    help="Output HTML file path.",
+)
 @click.pass_context
 def history(ctx: click.Context, primary: str, secondary: str, output: str) -> None:
     """
     Plot the historical evolution of collision risk (Pc) for a specific conjunction pair.
     """
     oure_ctx: OUREContext = ctx.obj
-    UI.header("Risk History Engine", f"Tracking Pc evolution for {primary} vs {secondary}")
+    UI.header(
+        "Risk History Engine", f"Tracking Pc evolution for {primary} vs {secondary}"
+    )
 
     records = oure_ctx.cache.get_risk_history(primary, secondary)
 
     if not records:
-        UI.error(f"No historical risk data found for {primary} vs {secondary}.", "Run `oure monitor` first to populate the history database.")
+        UI.error(
+            f"No historical risk data found for {primary} vs {secondary}.",
+            "Run `oure monitor` first to populate the history database.",
+        )
         return
 
     UI.success(f"Retrieved {len(records)} historical risk evaluations.")
@@ -43,24 +58,24 @@ def history(ctx: click.Context, primary: str, secondary: str, output: str) -> No
 
     eval_times = []
     pcs = []
-    
+
     style_map = {"RED": "danger", "YELLOW": "warning", "GREEN": "success"}
 
-    for r_raw in records[-10:]: # Print last 10
+    for r_raw in records[-10:]:  # Print last 10
         r = cast("dict[str, Any]", r_raw)
-        style = style_map.get(r['warning_level'], "white")
+        style = style_map.get(r["warning_level"], "white")
         table.add_row(
-            str(r['evaluation_time'])[:19].replace("T", " "),
-            str(r['tca'])[:19].replace("T", " "),
+            str(r["evaluation_time"])[:19].replace("T", " "),
+            str(r["tca"])[:19].replace("T", " "),
             f"{r['miss_distance_km']:.3f}",
             f"[{style}]{r['pc']:.2e}[/{style}]",
-            f"[{style}]{r['warning_level']}[/{style}]"
+            f"[{style}]{r['warning_level']}[/{style}]",
         )
 
     for r_raw in records:
         r = cast("dict[str, Any]", r_raw)
-        eval_times.append(r['evaluation_time'])
-        pcs.append(r['pc'])
+        eval_times.append(r["evaluation_time"])
+        pcs.append(r["pc"])
 
     console.print(table)
 
@@ -68,17 +83,27 @@ def history(ctx: click.Context, primary: str, secondary: str, output: str) -> No
     fig = go.Figure()
 
     # Plot Pc on left Y-axis
-    fig.add_trace(go.Scatter(
-        x=eval_times, y=pcs,
-        mode='lines+markers',
-        name='Probability of Collision (Pc)',
-        line=dict(color='red', width=3),
-        marker=dict(size=8, symbol='circle')
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=eval_times,
+            y=pcs,
+            mode="lines+markers",
+            name="Probability of Collision (Pc)",
+            line=dict(color="red", width=3),
+            marker=dict(size=8, symbol="circle"),
+        )
+    )
 
     # Add Risk Threshold Lines
-    fig.add_hline(y=1e-3, line_dash="dash", line_color="red", annotation_text="RED Alert (1e-3)")
-    fig.add_hline(y=1e-5, line_dash="dash", line_color="orange", annotation_text="YELLOW Alert (1e-5)")
+    fig.add_hline(
+        y=1e-3, line_dash="dash", line_color="red", annotation_text="RED Alert (1e-3)"
+    )
+    fig.add_hline(
+        y=1e-5,
+        line_dash="dash",
+        line_color="orange",
+        annotation_text="YELLOW Alert (1e-5)",
+    )
 
     fig.update_layout(
         title=f"Risk Evolution History: {primary} vs {secondary}",
@@ -87,9 +112,11 @@ def history(ctx: click.Context, primary: str, secondary: str, output: str) -> No
         yaxis_type="log",
         yaxis=dict(range=[-8, 0]),  # 1e-8 to 1.0
         plot_bgcolor="white",
-        xaxis_showgrid=True, xaxis_gridcolor='lightgrey',
-        yaxis_showgrid=True, yaxis_gridcolor='lightgrey',
-        hovermode="x unified"
+        xaxis_showgrid=True,
+        xaxis_gridcolor="lightgrey",
+        yaxis_showgrid=True,
+        yaxis_gridcolor="lightgrey",
+        hovermode="x unified",
     )
 
     out_path = Path(output)

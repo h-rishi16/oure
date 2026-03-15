@@ -8,9 +8,8 @@ Ensure your virtual environment is activated and dependencies are installed. You
 # Activate virtual environment
 source .venv/bin/activate
 
-# Install dependencies if you haven't already
-pip install -r requirements.txt
-pip install -e .
+# Install dependencies (including dev)
+pip install -e '.[dev]'
 ```
 
 ## Running the Automated Test Suite

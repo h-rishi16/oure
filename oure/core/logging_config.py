@@ -8,11 +8,12 @@ import structlog
 
 
 class LogFormat(str, Enum):
-    CONSOLE = "console" # Human-readable (Rich renderer)
-    JSON = "json"       # Machine-readable (for log aggregators)
+    CONSOLE = "console"  # Human-readable (Rich renderer)
+    JSON = "json"  # Machine-readable (for log aggregators)
+
 
 def configure_logging(
-    level: str = 'INFO',
+    level: str = "INFO",
     format: LogFormat = LogFormat.CONSOLE,
     log_file: str | None = None,
 ) -> None:
@@ -22,16 +23,12 @@ def configure_logging(
     if log_file:
         handlers.append(logging.FileHandler(log_file))
 
-    logging.basicConfig(
-        level=numeric_level,
-        format="%(message)s",
-        handlers=handlers
-    )
+    logging.basicConfig(level=numeric_level, format="%(message)s", handlers=handlers)
 
     processors: list[structlog.typing.Processor] = [
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
-        structlog.processors.TimeStamper(fmt='iso'),
+        structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
     ]
@@ -48,5 +45,6 @@ def configure_logging(
         cache_logger_on_first_use=True,
     )
 
+
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
-    return structlog.get_logger(name)  # type: ignore
+    return structlog.get_logger(name)

@@ -203,5 +203,12 @@ class NumericalPropagator(BasePropagator):
             atol=1e-8,
         )
 
+        if not sol.success:
+            from oure.core.exceptions import PropagationError
+
+            raise PropagationError(
+                f"Numerical integration failed in batch: {sol.message}"
+            )
+
         y_final = sol.y[:, -1]
         return cast("np.ndarray", y_final.reshape(-1, 6))

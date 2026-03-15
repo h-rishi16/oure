@@ -61,7 +61,7 @@ class KDTreeSpatialIndex:
         distances, indices = self._tree.query(point, k=k)
         if isinstance(distances, float):
             return [distances], [int(indices)]
-        return distances.tolist(), indices.tolist()  # type: ignore
+        return distances.tolist(), indices.tolist()
 
     @property
     def size(self) -> int:
