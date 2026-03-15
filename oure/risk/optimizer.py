@@ -139,7 +139,7 @@ class ManeuverOptimizer:
         cons = {"type": "ineq", "fun": constraint_pc}
 
         logger.info("Starting SLSQP maneuver optimization...")
-        res = minimize(
+        res = minimize(  # type: ignore[call-overload]
             fun=objective,
             x0=x0,
             method="SLSQP",

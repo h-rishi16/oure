@@ -13,7 +13,7 @@ from .main import cli
 from .utils import UI
 
 
-class RiskReportPDF(FPDF):  # type: ignore
+class RiskReportPDF(FPDF):  # type: ignore[misc]
     def header(self) -> None:
         self.set_font("helvetica", "B", 15)
         self.cell(

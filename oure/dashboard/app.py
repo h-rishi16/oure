@@ -2,7 +2,7 @@ import json
 from typing import Any
 
 import pandas as pd
-import requests  # type: ignore
+import requests
 import streamlit as st
 
 st.set_page_config(page_title="OURE Dashboard", layout="wide")

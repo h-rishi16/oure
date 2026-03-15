@@ -6,6 +6,7 @@ OURE Uncertainty Modeling - State Transition Matrix (STM)
 from __future__ import annotations
 
 import logging
+from typing import cast
 
 import numpy as np
 from scipy.linalg import expm
@@ -44,7 +45,7 @@ class STMCalculator:
         a_matrix = np.zeros((6, 6))
         a_matrix[:3, 3:] = np.eye(3)
         a_matrix[3:, :3] = g_matrix
-        return expm(a_matrix * dt)  # type: ignore
+        return cast(np.ndarray, expm(a_matrix * dt))
 
     def _j2_linearised_stm(self, state: StateVector, dt: float) -> np.ndarray:
         r = state.r
@@ -76,7 +77,7 @@ class STMCalculator:
         a_matrix = np.zeros((6, 6))
         a_matrix[:3, 3:] = np.eye(3)
         a_matrix[3:, :3] = g_2body + delta_g
-        return expm(a_matrix * dt)  # type: ignore
+        return cast(np.ndarray, expm(a_matrix * dt))
 
     def _numerical_stm(self, state: StateVector, dt: float) -> np.ndarray:
         """
