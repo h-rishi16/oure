@@ -11,6 +11,11 @@ echo "Starting OURE Streamlit Dashboard on port 8501..."
 .venv/bin/streamlit run oure/dashboard/app.py &
 DASH_PID=$!
 
+sleep 2
+kill -0 $CELERY_PID 2>/dev/null || { echo "ERROR: Celery worker failed to start"; exit 1; }
+kill -0 $API_PID    2>/dev/null || { echo "ERROR: FastAPI failed to start"; exit 1; }
+kill -0 $DASH_PID   2>/dev/null || { echo "ERROR: Dashboard failed to start"; exit 1; }
+
 echo "Web components are running."
 echo "API Docs: http://localhost:8000/docs"
 echo "Dashboard: http://localhost:8501"

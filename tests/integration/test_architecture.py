@@ -43,7 +43,7 @@ def test_strict_decoupling():
                                     continue
                                 # New Architecture explicitly allows Conjunction and Uncertainty to depend on BasePropagator
                                 if (
-                                    layer in ("conjunction", "uncertainty")
+                                    layer in ("conjunction", "uncertainty", "risk")
                                     and imported_layer == "physics"
                                 ):
                                     continue

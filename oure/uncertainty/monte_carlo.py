@@ -78,10 +78,33 @@ class MonteCarloUncertaintyPropagator:
             f"Propagating {self.n_samples} Monte Carlo samples to {target_epoch}"
         )
 
-        # Vectorized propagation
-        ghost_vecs = self.propagator.propagate_many_to(
-            samples_x0, initial_state.epoch, target_epoch
-        )
+        # Parallelized propagation
+        import os
+        from concurrent.futures import ThreadPoolExecutor
+
+        # Determine chunk size and workers
+        n_workers = min(os.cpu_count() or 1, 8)
+        chunk_size = max(1, self.n_samples // n_workers)
+
+        chunks = [
+            samples_x0[i : i + chunk_size] for i in range(0, self.n_samples, chunk_size)
+        ]
+
+        all_ghost_vecs = []
+        with ThreadPoolExecutor(max_workers=n_workers) as executor:
+            futures = [
+                executor.submit(
+                    self.propagator.propagate_many_to,
+                    chunk,
+                    initial_state.epoch,
+                    target_epoch,
+                )
+                for chunk in chunks
+            ]
+            for future in futures:
+                all_ghost_vecs.append(future.result())
+
+        ghost_vecs = np.vstack(all_ghost_vecs)
 
         # Convert the propagated vectors back to StateVector objects (if needed for return)
         ghost_states = [

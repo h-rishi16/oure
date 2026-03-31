@@ -35,13 +35,17 @@ class NumericalPropagator(BasePropagator):
     def __init__(
         self,
         cd: float = 2.2,
+        cr: float = 1.2,
         area_m2: float = 10.0,
         mass_kg: float = 500.0,
         solar_flux: float = 150.0,
+        include_srp: bool = True,
     ):
         self.cd = cd
+        self.cr = cr
         self.am_ratio = area_m2 / mass_kg
         self.f10_7 = solar_flux
+        self.include_srp = include_srp
 
         self._atmo = AtmosphericModel(solar_flux=solar_flux)
 
@@ -92,7 +96,21 @@ class NumericalPropagator(BasePropagator):
         else:
             a_drag = np.zeros(3)
 
-        a_tot = a_grav + a_j2 + a_drag
+        # 4. Solar Radiation Pressure (SRP)
+        a_srp = np.zeros(3)
+        if self.include_srp:
+            # First-order approximation: Assume constant sun vector for the step
+            from datetime import UTC
+
+            from .srp_corrector import SRPCorrector
+
+            dummy_srp = SRPCorrector(self, cr=self.cr, area_m2=1.0, mass_kg=1.0)
+            sun_hat = dummy_srp._get_sun_vector(datetime.now(UTC))
+            p_sun = 4.56e-6
+            a_srp_ms2 = -p_sun * self.cr * self.am_ratio * sun_hat
+            a_srp = a_srp_ms2 / 1000.0
+
+        a_tot = a_grav + a_j2 + a_drag + a_srp
         return np.concatenate([v, a_tot])
 
     def propagate(self, state: StateVector, dt_seconds: float) -> StateVector:
@@ -182,7 +200,21 @@ class NumericalPropagator(BasePropagator):
             v_hat = v_rel[valid] / v_mag[valid][:, np.newaxis]
             a_drag[valid] = (a_drag_ms2 / 1000.0)[:, np.newaxis] * v_hat
 
-        a_tot = a_grav + a_j2 + a_drag
+        # 4. Solar Radiation Pressure (SRP)
+        a_srp = np.zeros_like(v)
+        if self.include_srp:
+            from datetime import UTC
+
+            from .srp_corrector import SRPCorrector
+
+            dummy_srp = SRPCorrector(self, cr=self.cr, area_m2=1.0, mass_kg=1.0)
+            sun_hat = dummy_srp._get_sun_vector(datetime.now(UTC))
+            p_sun = 4.56e-6
+            # a_srp is same for all in this simplified model
+            a_srp_ms2 = -p_sun * self.cr * self.am_ratio * sun_hat
+            a_srp[:] = a_srp_ms2 / 1000.0
+
+        a_tot = a_grav + a_j2 + a_drag + a_srp
         return np.hstack([v, a_tot]).flatten()
 
     def propagate_many_to(

@@ -14,6 +14,7 @@ from .base import BasePropagator
 from .drag_corrector import AtmosphericDragCorrector
 from .j2_corrector import J2PerturbationCorrector
 from .sgp4_propagator import SGP4Propagator
+from .srp_corrector import SRPCorrector
 
 logger = logging.getLogger("oure.physics.factory")
 
@@ -29,7 +30,9 @@ class PropagatorFactory:
         solar_flux: float = SOLAR_FLUX_MEAN_SFU,
         include_j2: bool = False,
         include_drag: bool = True,
+        include_srp: bool = False,
         cd: float = 2.2,
+        cr: float = 1.2,
         area_m2: float = 10.0,
         mass_kg: float = 500.0,
     ) -> BasePropagator:
@@ -47,5 +50,9 @@ class PropagatorFactory:
                 chain, cd=cd, area_m2=area_m2, mass_kg=mass_kg, solar_flux=solar_flux
             )
             logger.debug(f"Atmospheric drag layer enabled (F10.7={solar_flux})")
+
+        if include_srp:
+            chain = SRPCorrector(chain, cr=cr, area_m2=area_m2, mass_kg=mass_kg)
+            logger.debug("Solar radiation pressure layer enabled")
 
         return chain

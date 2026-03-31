@@ -3,8 +3,6 @@ OURE Command-Line Interface - Main Entry Point
 ==============================================
 """
 
-import logging
-import sys
 from pathlib import Path
 
 import click
@@ -12,22 +10,12 @@ import click_completion
 
 click_completion.init()
 
+from oure.core.logging_config import LogFormat, configure_logging
 from oure.data.cache import CacheManager
 from oure.data.noaa import NOAASolarFluxFetcher
 from oure.data.spacetrack import SpaceTrackFetcher
 
-
-def setup_logging(verbose: bool, log_file: str | None = None) -> None:
-    level = logging.DEBUG if verbose else logging.INFO
-    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
-    if log_file:
-        handlers.append(logging.FileHandler(log_file))
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-        handlers=handlers,
-    )
+# setup_logging removed — configure_logging() from logging_config is used instead
 
 
 class OUREContext:
@@ -81,7 +69,17 @@ def cli(
     ║    Satellite Collision Probability Solver    ║
     ╚══════════════════════════════════════════════╝
     """
-    setup_logging(verbose, log_file)
+    import os
+
+    fmt = (
+        LogFormat.CONSOLE
+        if not os.getenv("OURE_LOG_FORMAT") == "json"
+        else LogFormat.JSON
+    )
+    configure_logging(
+        level="DEBUG" if verbose else "INFO", format=fmt, log_file=log_file
+    )
+
     ctx.ensure_object(dict)
     ctx.obj = OUREContext(
         st_username=st_username,
