@@ -9,7 +9,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class OUREConfig(BaseSettings):
+class OUREConfig(BaseSettings):  # type: ignore[misc]
     """
     Global settings for the OURE engine, validated at startup.
     """

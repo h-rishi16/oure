@@ -6,6 +6,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field, validator
 
+from oure.api.celery_app import celery_app
 from oure.api.tasks import run_fleet_screening
 from oure.data.cdm_parser import CDMParser
 from oure.risk.calculator import RiskCalculator
@@ -57,7 +58,7 @@ def submit_screening_task(req: TaskSubmitRequest) -> dict[str, str]:
 @app.get("/tasks/{task_id}")
 def get_task_status(task_id: str) -> dict[str, object]:
     """Retrieve the status and results of a background Celery task."""
-    task_result = AsyncResult(task_id)
+    task_result = AsyncResult(task_id, app=celery_app)
     response: dict[str, object] = {
         "task_id": task_id,
         "state": task_result.state,

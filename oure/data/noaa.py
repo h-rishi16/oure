@@ -99,12 +99,18 @@ class NOAASolarFluxFetcher(BaseDataFetcher):
                 )
             ]
 
-    def _parse_flux(self, data: dict[str, Any]) -> SolarFluxData:
+    def _parse_flux(self, data: dict[str, Any] | list[dict[str, Any]]) -> SolarFluxData:
         # NOAA JSON format: {"Flux": "175", "TimeStamp": "2024-01-15 12:00:00"}
+        # Sometimes returns a list of dictionaries.
+        if isinstance(data, list):
+            data_dict = data[-1] if len(data) > 0 else {}
+        else:
+            data_dict = data
+
         return SolarFluxData(
             date=datetime.now(UTC),
-            f10_7=float(data.get("Flux", 150.0)),
-            f10_7_81day_avg=float(data.get("Flux", 150.0)),
+            f10_7=float(data_dict.get("Flux", 150.0)),
+            f10_7_81day_avg=float(data_dict.get("Flux", 150.0)),
             ap_index=15.0,
         )
 

@@ -14,8 +14,6 @@ build/
 .pre-commit-config.yaml
 tests/
 Makefile
-pyproject.toml
-README.md
 CHANGELOG.md
 mock_results.json
 *.db
