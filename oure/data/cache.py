@@ -177,7 +177,9 @@ class CacheManager:
                 ),
             )
 
-    def get_tle(self, sat_id: str, max_age_hours: float | None = None) -> TLERecord | None:
+    def get_tle(
+        self, sat_id: str, max_age_hours: float | None = None
+    ) -> TLERecord | None:
         from oure.core.config import settings
 
         if max_age_hours is None:

@@ -5,7 +5,7 @@ OURE Physics Engine - High Precision Orbit Propagator (HPOP)
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
 import numpy as np
@@ -105,6 +105,7 @@ class NumericalPropagator(BasePropagator):
             sim_epoch = (self._base_epoch or datetime.now(UTC)) + timedelta(seconds=t)
 
             from .srp_corrector import SRPCorrector
+
             dummy_srp = SRPCorrector(self, cr=self.cr, area_m2=1.0, mass_kg=1.0)
             sun_hat = dummy_srp._get_sun_vector(sim_epoch)
             p_sun = 4.56e-6
@@ -133,6 +134,7 @@ class NumericalPropagator(BasePropagator):
 
         if not sol.success:
             from oure.core.exceptions import PropagationError
+
             raise PropagationError(f"Numerical integration failed: {sol.message}")
 
         y_final = sol.y[:, -1]
@@ -140,6 +142,7 @@ class NumericalPropagator(BasePropagator):
         r_final = y_final[:3]
         if np.linalg.norm(r_final) < constants.R_EARTH_KM:
             from oure.core.exceptions import PropagationError
+
             raise PropagationError(
                 "Trajectory impacted Earth's surface during numerical propagation."
             )
@@ -204,6 +207,7 @@ class NumericalPropagator(BasePropagator):
         if self.include_srp:
             sim_epoch = (self._base_epoch or datetime.now(UTC)) + timedelta(seconds=t)
             from .srp_corrector import SRPCorrector
+
             dummy_srp = SRPCorrector(self, cr=self.cr, area_m2=1.0, mass_kg=1.0)
             sun_hat = dummy_srp._get_sun_vector(sim_epoch)
             p_sun = 4.56e-6
@@ -234,9 +238,16 @@ class NumericalPropagator(BasePropagator):
 
         if not sol.success:
             from oure.core.exceptions import PropagationError
+
             raise PropagationError(
                 f"Numerical integration failed in batch: {sol.message}"
             )
 
         y_final = sol.y[:, -1]
+
+        # Record performance metrics
+        from oure.core.metrics import MetricsManager
+
+        MetricsManager.record_propagation(len(states), p_type="numerical")
+
         return cast("np.ndarray", y_final.reshape(-1, 6))

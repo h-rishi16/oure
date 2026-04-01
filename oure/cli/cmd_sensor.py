@@ -60,15 +60,14 @@ def task_sensor(
 
     p_cov = _default_covariance(primary)
     s_cov_orig = _default_covariance(secondary)
-    
+
     # Create stale covariance by inflating position uncertainty without mutating in-place
     stale_matrix = s_cov_orig.matrix.copy()
     stale_matrix[:3, :3] = np.eye(3) * 25.0  # 25 km^2 = 5km sigma
     from oure.core.models import CovarianceMatrix
+
     s_cov_stale = CovarianceMatrix(
-        matrix=stale_matrix, 
-        epoch=s_cov_orig.epoch, 
-        sat_id=s_cov_orig.sat_id
+        matrix=stale_matrix, epoch=s_cov_orig.epoch, sat_id=s_cov_orig.sat_id
     )
 
     base_prop = NumericalPropagator(solar_flux=flux)

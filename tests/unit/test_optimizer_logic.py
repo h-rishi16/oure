@@ -4,7 +4,12 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from oure.core.models import CovarianceMatrix, RiskResult, StateVector, OptimizationResult
+from oure.core.models import (
+    CovarianceMatrix,
+    OptimizationResult,
+    RiskResult,
+    StateVector,
+)
 from oure.physics.numerical import NumericalPropagator
 from oure.risk.optimizer import ManeuverOptimizer
 
@@ -12,10 +17,15 @@ from oure.risk.optimizer import ManeuverOptimizer
 @pytest.fixture
 def base_states():
     from datetime import UTC, datetime
+
     epoch = datetime(2026, 4, 1, 12, 58, 27, 400021, tzinfo=UTC)
-    primary = StateVector(r=np.array([7000, 0, 0]), v=np.array([0, 7.5, 0]), epoch=epoch, sat_id="1")
-    secondary = StateVector(r=np.array([7000.05, 0, 0]), v=np.array([0, -7.5, 0]), epoch=epoch, sat_id="2")
-    cov = CovarianceMatrix(matrix=np.eye(6)*1e-6, epoch=epoch, sat_id="1")
+    primary = StateVector(
+        r=np.array([7000, 0, 0]), v=np.array([0, 7.5, 0]), epoch=epoch, sat_id="1"
+    )
+    secondary = StateVector(
+        r=np.array([7000.05, 0, 0]), v=np.array([0, -7.5, 0]), epoch=epoch, sat_id="2"
+    )
+    cov = CovarianceMatrix(matrix=np.eye(6) * 1e-6, epoch=epoch, sat_id="1")
     return primary, secondary, cov, epoch
 
 
@@ -73,7 +83,7 @@ def test_maneuver_optimizer(base_states):
             )
 
             result = optimizer.optimize()
-            
+
             assert isinstance(result, OptimizationResult)
             assert result.success is True
             assert result.final_pc < 1e-5

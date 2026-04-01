@@ -7,13 +7,17 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
 
 import numpy as np
 from scipy.optimize import minimize
 
 from oure.conjunction.tca_finder import TCARefinementEngine
-from oure.core.models import ConjunctionEvent, CovarianceMatrix, StateVector, OptimizationResult
+from oure.core.models import (
+    ConjunctionEvent,
+    CovarianceMatrix,
+    OptimizationResult,
+    StateVector,
+)
 from oure.physics.base import BasePropagator
 from oure.physics.maneuver import Maneuver, ManeuverPropagator
 from oure.risk.calculator import RiskCalculator

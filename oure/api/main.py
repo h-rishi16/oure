@@ -3,7 +3,8 @@ import tempfile
 
 from celery.result import AsyncResult
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from prometheus_fastapi_instrumentator import Instrumentator
+from pydantic import BaseModel, Field, validator
 
 from oure.api.tasks import run_fleet_screening
 from oure.data.cdm_parser import CDMParser
@@ -14,6 +15,9 @@ app = FastAPI(
     version="1.0.0",
     description="Orbital Uncertainty & Risk Engine API",
 )
+
+# Instrument the app for Prometheus monitoring
+Instrumentator().instrument(app).expose(app)
 
 
 class RiskResponse(BaseModel):
@@ -28,7 +32,13 @@ class RiskResponse(BaseModel):
 
 class TaskSubmitRequest(BaseModel):
     primary_id: str
-    secondary_ids: list[str]
+    secondary_ids: list[str] = Field(..., max_length=1000)
+
+    @validator("secondary_ids")
+    def limit_ids(cls, v: list[str]) -> list[str]:
+        if len(v) > 1000:
+            raise ValueError("Maximum 1,000 secondary IDs per screening task.")
+        return v
 
 
 @app.get("/health")
@@ -73,32 +83,28 @@ async def analyze_cdm(
     if not file.filename or not file.filename.endswith(".json"):
         raise HTTPException(status_code=400, detail="Only JSON CDMs are supported.")
 
+    temp_path = None
     try:
-        # Save uploaded file temporarily to parse it
+        # Create temp file inside the try block to ensure cleanup
         with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_file:
+            temp_path = temp_file.name
             contents = await file.read()
             temp_file.write(contents)
-            temp_path = temp_file.name
 
-        try:
-            # Parse and calculate
-            event = CDMParser.parse_json(temp_path)
-            calc = RiskCalculator(hard_body_radius_m=hard_body_radius)
-            result = calc.compute_pc(event)
+        # Parse and calculate
+        event = CDMParser.parse_json(temp_path)
+        calc = RiskCalculator(hard_body_radius_m=hard_body_radius)
+        result = calc.compute_pc(event)
 
-            return RiskResponse(
-                primary_id=result.conjunction.primary_id,
-                secondary_id=result.conjunction.secondary_id,
-                tca=result.conjunction.tca.isoformat(),
-                pc=result.pc,
-                warning_level=result.warning_level,
-                miss_distance_km=result.conjunction.miss_distance_km,
-                rel_velocity_km_s=result.conjunction.relative_velocity_km_s,
-            )
-        finally:
-            # Cleanup ALWAYS
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
+        return RiskResponse(
+            primary_id=result.conjunction.primary_id,
+            secondary_id=result.conjunction.secondary_id,
+            tca=result.conjunction.tca.isoformat(),
+            pc=result.pc,
+            warning_level=result.warning_level,
+            miss_distance_km=result.conjunction.miss_distance_km,
+            rel_velocity_km_s=result.conjunction.relative_velocity_km_s,
+        )
     except Exception:
         import logging
 
@@ -107,3 +113,7 @@ async def analyze_cdm(
             status_code=500,
             detail="Failed to parse CDM file. Ensure it follows the CCSDS JSON schema.",
         )
+    finally:
+        # Guaranteed cleanup regardless of where an exception occurred
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)

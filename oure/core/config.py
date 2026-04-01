@@ -3,6 +3,8 @@ OURE Configuration Management
 =============================
 """
 
+import os
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -42,4 +44,7 @@ class OUREConfig(BaseSettings):
     log_format: str = Field(default="console", validation_alias="OURE_LOG_FORMAT")
 
 
-settings = OUREConfig()
+settings = OUREConfig(
+    spacetrack_user=os.getenv("SPACETRACK_USER", "REQUIRED"),
+    spacetrack_pass=os.getenv("SPACETRACK_PASS", "REQUIRED"),
+)

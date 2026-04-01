@@ -36,12 +36,20 @@ class MonteCarloUncertaintyPropagator:
     output covariance from the ensemble.
     """
 
+    MAX_SAMPLES = 100_000
+
     def __init__(
         self,
         propagator: BasePropagator,
         n_samples: int = 1000,
         random_seed: int | None = 42,
     ):
+        if n_samples > self.MAX_SAMPLES:
+            logger.warning(
+                f"Requested {n_samples} samples exceeds cap. Clamping to {self.MAX_SAMPLES}."
+            )
+            n_samples = self.MAX_SAMPLES
+
         self.propagator = propagator
         self.n_samples = n_samples
         self.rng = np.random.default_rng(random_seed)

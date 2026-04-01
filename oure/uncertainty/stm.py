@@ -53,7 +53,11 @@ class STMCalculator:
         z_r = r_hat[2]
 
         coeff = (
-            -1.5 * constants.J2 * constants.MU_KM3_S2 * constants.R_EARTH_KM**2 / r_mag**5
+            -1.5
+            * constants.J2
+            * constants.MU_KM3_S2
+            * constants.R_EARTH_KM**2
+            / r_mag**5
         )
         delta_g = np.zeros((3, 3))
         for i in range(3):

@@ -155,17 +155,17 @@ def avoid(
             )
             result = optimizer.optimize()
 
-        if result["success"]:
-            dv = result["optimal_dv_km_s"]
+        if result.success:
+            dv = result.optimal_dv_km_s
             UI.success(
-                f"Minimum fuel maneuver found: [bold cyan]{result['dv_mag_cm_s']:.3f} cm/s[/bold cyan]"
+                f"Minimum fuel maneuver found: [bold cyan]{np.linalg.norm(dv) * 100000.0:.3f} cm/s[/bold cyan]"
             )
             console.print(f"[dim]Vector (ECI km/s): {dv}[/dim]")
             console.print(
-                f"[success]Final Pc:[/success] {result['final_pc']:.2e} (Target: 1.00e-05)"
+                f"[success]Final Pc:[/success] {result.final_pc:.2e} (Target: 1.00e-05)"
             )
         else:
-            UI.error(f"Optimization failed: {result['message']}")
+            UI.error(f"Optimization failed: {result.message}")
 
     else:
         # Trade Space Path

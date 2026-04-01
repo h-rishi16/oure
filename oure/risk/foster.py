@@ -45,7 +45,7 @@ class FosterPcCalculator:
             return self._foster_series(b_miss, C_2d)
 
     def _numerical_integration(self, b: np.ndarray, C: np.ndarray) -> float:
-        C_inv = np.linalg.inv(C)
+        C_inv = np.linalg.pinv(C)
         det_C = np.linalg.det(C)
         if det_C <= 0:
             return 0.0
@@ -80,7 +80,7 @@ class FosterPcCalculator:
         lam1, lam2 = sorted(np.abs(eigenvalues) + 1e-15)  # lam1=min, lam2=max
 
         # u = 1/2 * b^T * C^-1 * b (Half of Mahalanobis distance squared)
-        C_inv = np.linalg.inv(C)
+        C_inv = np.linalg.pinv(C)
         u = 0.5 * float(b @ C_inv @ b)
         u = max(u, 1e-12)  # Clamp u to prevent log(0) and truncation at n=0
 

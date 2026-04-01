@@ -24,11 +24,12 @@ dependencies = [
     "fpdf2>=2.7",
     "plotly>=5.18",
     "pandas>=2.1",
+    "prometheus-client>=0.19.0",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov", "pytest-asyncio", "hypothesis", "ruff", "mypy", "pre-commit", "faker", "scipy-stubs", "pandas-stubs", "types-requests"]
-web = ["fastapi>=0.100", "uvicorn>=0.20", "streamlit>=1.30", "python-multipart>=0.0.9", "celery>=5.3", "redis>=5.0"]
+web = ["fastapi>=0.100", "uvicorn>=0.20", "streamlit>=1.30", "python-multipart>=0.0.9", "celery>=5.3", "redis>=5.0", "prometheus-fastapi-instrumentator>=6.1.0"]
 
 [project.scripts]
 oure = "oure.cli.main:cli"

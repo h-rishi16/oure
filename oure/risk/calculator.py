@@ -28,9 +28,15 @@ class RiskCalculator:
         """
         Full Pc pipeline for one conjunction event.
         """
+        import time
+
+        from oure.core.metrics import MetricsManager
+
+        start_time = time.perf_counter()
+
         # Safety check: Near-zero relative velocity makes B-plane projection singular
         if event.relative_velocity_km_s < 1e-6:
-            return RiskResult(
+            res = RiskResult(
                 conjunction=event,
                 pc=0.0,
                 combined_covariance=np.zeros((2, 2)),
@@ -40,6 +46,8 @@ class RiskCalculator:
                 hard_body_radius_m=self.hard_body_radius_km * 1000.0,
                 method="SKIPPED_SINGULAR",
             )
+            MetricsManager.record_risk_duration(time.perf_counter() - start_time)
+            return res
 
         projection = self.bplane_projector.project(event)
 
@@ -61,4 +69,8 @@ class RiskCalculator:
         )
 
         result.warning_level = alert.classify(result)
+
+        # Record metrics
+        MetricsManager.record_risk_duration(time.perf_counter() - start_time)
+
         return result

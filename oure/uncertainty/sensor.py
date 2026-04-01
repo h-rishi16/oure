@@ -40,7 +40,7 @@ class SensorTaskingSimulator:
         s = h @ p_minus @ h.T + self.r_sensor
 
         # Kalman Gain (K = P*H^T*S^-1)
-        k = p_minus @ h.T @ np.linalg.inv(s)
+        k = p_minus @ h.T @ np.linalg.pinv(s)
 
         # Posterior covariance (Joseph form for numerical stability)
         # P_plus = (I - KH) * P_minus * (I - KH)^T + K * R * K^T
