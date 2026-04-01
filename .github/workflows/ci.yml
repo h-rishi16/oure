@@ -25,7 +25,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e '.[dev,vis]'
+        pip install -e '.[dev,web]'
 
     - name: Lint with ruff
       run: |
@@ -39,3 +39,6 @@ jobs:
     - name: Run tests with pytest
       run: |
         pytest tests/ -v
+      env:
+        SPACETRACK_USER: mock
+        SPACETRACK_PASS: mock
