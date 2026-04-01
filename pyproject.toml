@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "oure-risk-engine"
-version = "1.1.0"
+version = "1.2.0"
 description = "Orbital Uncertainty & Risk Engine --- Satellite Collision Probability Solver"
 readme = "README.md"
 license = { text = "MIT" }
