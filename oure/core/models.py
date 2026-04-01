@@ -224,6 +224,17 @@ class RiskResult:
     monte_carlo_samples: int = 0
 
 
+@dataclass
+class OptimizationResult:
+    """Result of a maneuver optimization task."""
+
+    optimal_dv_km_s: np.ndarray
+    final_pc: float
+    iterations: int
+    success: bool
+    message: str
+
+
 @dataclass(frozen=True)
 class CacheEntry:
     """Represents a record in the SQLite key-value cache."""

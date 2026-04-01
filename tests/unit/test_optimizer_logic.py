@@ -1,39 +1,21 @@
-"""
-Tests for ManeuverOptimizer — uses mocked propagator and TCA finder
-so the SLSQP loop finishes in milliseconds.
-"""
-
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-from oure.core.models import (
-    CovarianceMatrix,
-    RiskResult,
-    StateVector,
-)
+from oure.core.models import CovarianceMatrix, RiskResult, StateVector, OptimizationResult
 from oure.physics.numerical import NumericalPropagator
 from oure.risk.optimizer import ManeuverOptimizer
 
 
 @pytest.fixture
 def base_states():
-    epoch = datetime.now(UTC)
-    primary = StateVector(
-        r=np.array([7000.0, 0.0, 0.0]),
-        v=np.array([0.0, 7.5, 0.0]),
-        epoch=epoch,
-        sat_id="1",
-    )
-    secondary = StateVector(
-        r=np.array([7000.1, 0.0, 0.0]),
-        v=np.array([0.0, -7.5, 0.0]),
-        epoch=epoch,
-        sat_id="2",
-    )
-    cov = CovarianceMatrix(matrix=np.eye(6) * 0.01, epoch=epoch, sat_id="1")
+    from datetime import UTC, datetime
+    epoch = datetime(2026, 4, 1, 12, 58, 27, 400021, tzinfo=UTC)
+    primary = StateVector(r=np.array([7000, 0, 0]), v=np.array([0, 7.5, 0]), epoch=epoch, sat_id="1")
+    secondary = StateVector(r=np.array([7000.05, 0, 0]), v=np.array([0, -7.5, 0]), epoch=epoch, sat_id="2")
+    cov = CovarianceMatrix(matrix=np.eye(6)*1e-6, epoch=epoch, sat_id="1")
     return primary, secondary, cov, epoch
 
 
@@ -91,13 +73,8 @@ def test_maneuver_optimizer(base_states):
             )
 
             result = optimizer.optimize()
-
-    # Verify the result structure regardless of convergence
-    assert "success" in result
-    assert "optimal_dv_km_s" in result
-    if result["success"]:
-        assert result["optimal_dv_km_s"].shape == (3,)
-        assert "final_pc" in result
-        assert "iterations" in result
-    else:
-        assert "message" in result
+            
+            assert isinstance(result, OptimizationResult)
+            assert result.success is True
+            assert result.final_pc < 1e-5
+            assert len(result.optimal_dv_km_s) == 3

@@ -7,7 +7,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class OURESettings(BaseSettings):
+class OUREConfig(BaseSettings):
     """
     Global settings for the OURE engine, validated at startup.
     """
@@ -16,9 +16,9 @@ class OURESettings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    # Space-Track Credentials
-    spacetrack_user: str = Field(default="", validation_alias="SPACETRACK_USER")
-    spacetrack_pass: str = Field(default="", validation_alias="SPACETRACK_PASS")
+    # Space-Track Credentials (Required - no defaults)
+    spacetrack_user: str = Field(validation_alias="SPACETRACK_USER")
+    spacetrack_pass: str = Field(validation_alias="SPACETRACK_PASS")
 
     # Default Physics Parameters
     default_sigma_km: float = Field(
@@ -26,6 +26,9 @@ class OURESettings(BaseSettings):
     )
     solar_flux_override: float | None = Field(
         default=None, validation_alias="OURE_SOLAR_FLUX_OVERRIDE"
+    )
+    tle_max_age_hours: float = Field(
+        default=48.0, validation_alias="OURE_TLE_MAX_AGE_HOURS"
     )
 
     # Analysis Defaults
@@ -39,4 +42,4 @@ class OURESettings(BaseSettings):
     log_format: str = Field(default="console", validation_alias="OURE_LOG_FORMAT")
 
 
-settings = OURESettings()
+settings = OUREConfig()

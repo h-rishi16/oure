@@ -31,6 +31,7 @@ if [ ! -f "keys.env" ]; then
     echo "SPACETRACK_USER=$st_user" > "$INSTALL_DIR/keys.env"
     echo "SPACETRACK_PASS=$st_pass" >> "$INSTALL_DIR/keys.env"
 else
+    echo -e "${YELLOW}==>${NC} WARNING: Local keys.env found and will be copied to Sandbox."
     cp keys.env "$INSTALL_DIR/keys.env"
 fi
 

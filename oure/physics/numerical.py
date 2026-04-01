@@ -5,7 +5,7 @@ OURE Physics Engine - High Precision Orbit Propagator (HPOP)
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import cast
 
 import numpy as np
@@ -30,6 +30,7 @@ class NumericalPropagator(BasePropagator):
     - Point-mass gravity
     - J2 Oblateness
     - Exponential Atmospheric Drag
+    - Solar Radiation Pressure (SRP)
     """
 
     def __init__(
@@ -48,6 +49,7 @@ class NumericalPropagator(BasePropagator):
         self.include_srp = include_srp
 
         self._atmo = AtmosphericModel(solar_flux=solar_flux)
+        self._base_epoch: datetime | None = None
 
     def _dynamics(self, t: float, y: np.ndarray) -> np.ndarray:
         """
@@ -99,13 +101,12 @@ class NumericalPropagator(BasePropagator):
         # 4. Solar Radiation Pressure (SRP)
         a_srp = np.zeros(3)
         if self.include_srp:
-            # First-order approximation: Assume constant sun vector for the step
-            from datetime import UTC
+            # Calculate actual simulation epoch
+            sim_epoch = (self._base_epoch or datetime.now(UTC)) + timedelta(seconds=t)
 
             from .srp_corrector import SRPCorrector
-
             dummy_srp = SRPCorrector(self, cr=self.cr, area_m2=1.0, mass_kg=1.0)
-            sun_hat = dummy_srp._get_sun_vector(datetime.now(UTC))
+            sun_hat = dummy_srp._get_sun_vector(sim_epoch)
             p_sun = 4.56e-6
             a_srp_ms2 = -p_sun * self.cr * self.am_ratio * sun_hat
             a_srp = a_srp_ms2 / 1000.0
@@ -117,6 +118,7 @@ class NumericalPropagator(BasePropagator):
         if dt_seconds == 0:
             return state
 
+        self._base_epoch = state.epoch
         y0 = state.state_vector_6d
 
         # Integrate using RK45
@@ -131,7 +133,6 @@ class NumericalPropagator(BasePropagator):
 
         if not sol.success:
             from oure.core.exceptions import PropagationError
-
             raise PropagationError(f"Numerical integration failed: {sol.message}")
 
         y_final = sol.y[:, -1]
@@ -139,13 +140,11 @@ class NumericalPropagator(BasePropagator):
         r_final = y_final[:3]
         if np.linalg.norm(r_final) < constants.R_EARTH_KM:
             from oure.core.exceptions import PropagationError
-
             raise PropagationError(
                 "Trajectory impacted Earth's surface during numerical propagation."
             )
 
         target_epoch = state.epoch + timedelta(seconds=dt_seconds)
-
         return StateVector.from_6d(y_final, target_epoch, state.sat_id)
 
     def propagate_to(self, state: StateVector, target_epoch: datetime) -> StateVector:
@@ -203,14 +202,11 @@ class NumericalPropagator(BasePropagator):
         # 4. Solar Radiation Pressure (SRP)
         a_srp = np.zeros_like(v)
         if self.include_srp:
-            from datetime import UTC
-
+            sim_epoch = (self._base_epoch or datetime.now(UTC)) + timedelta(seconds=t)
             from .srp_corrector import SRPCorrector
-
             dummy_srp = SRPCorrector(self, cr=self.cr, area_m2=1.0, mass_kg=1.0)
-            sun_hat = dummy_srp._get_sun_vector(datetime.now(UTC))
+            sun_hat = dummy_srp._get_sun_vector(sim_epoch)
             p_sun = 4.56e-6
-            # a_srp is same for all in this simplified model
             a_srp_ms2 = -p_sun * self.cr * self.am_ratio * sun_hat
             a_srp[:] = a_srp_ms2 / 1000.0
 
@@ -224,6 +220,7 @@ class NumericalPropagator(BasePropagator):
         if dt_seconds == 0:
             return states
 
+        self._base_epoch = initial_epoch
         y0 = states.flatten()
 
         sol = solve_ivp(
@@ -237,7 +234,6 @@ class NumericalPropagator(BasePropagator):
 
         if not sol.success:
             from oure.core.exceptions import PropagationError
-
             raise PropagationError(
                 f"Numerical integration failed in batch: {sol.message}"
             )

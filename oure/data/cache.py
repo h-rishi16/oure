@@ -177,7 +177,12 @@ class CacheManager:
                 ),
             )
 
-    def get_tle(self, sat_id: str, max_age_hours: float = 48.0) -> TLERecord | None:
+    def get_tle(self, sat_id: str, max_age_hours: float | None = None) -> TLERecord | None:
+        from oure.core.config import settings
+
+        if max_age_hours is None:
+            max_age_hours = settings.tle_max_age_hours
+
         with closing(sqlite3.connect(self.db_path)) as conn:
             row = conn.execute(
                 "SELECT * FROM tle_records WHERE sat_id=?", (sat_id,)

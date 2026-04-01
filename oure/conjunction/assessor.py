@@ -50,9 +50,7 @@ class ConjunctionAssessor:
         t0 = primary.epoch
         time_offsets = [i * self.tca_time_step_s for i in range(n_steps)]
 
-        logger.info(
-            f"Screening {len(secondaries)} objects over {look_ahead_hours}h ({n_steps} steps)"
-        )
+        logger.info(f"Screening {len(secondaries)} objects over {look_ahead_hours}h ({n_steps} steps)")
 
         # candidate_pairs maps secondary index -> (first_flagged_epoch, last_flagged_epoch)
         candidate_pairs: dict[int, tuple[datetime, datetime]] = {}
@@ -63,10 +61,13 @@ class ConjunctionAssessor:
 
         # Optimization: Group secondaries by their propagator instance to enable batching
         from collections import defaultdict
-
         prop_groups = defaultdict(list)
         for j, (_, _, s_prop) in enumerate(secondaries):
             prop_groups[id(s_prop)].append(j)
+
+        # Optimization: Epoch-bucketed KD-Tree rebuild (Item 29)
+        last_tree_epoch: datetime | None = None
+        current_index: KDTreeSpatialIndex | None = None
 
         for dt in time_offsets:
             epoch = t0 + timedelta(seconds=dt)
@@ -90,6 +91,8 @@ class ConjunctionAssessor:
                     except Exception:
                         sec_positions[indices] = (1e9, 1e9, 1e9)
                 else:
+                    # Note: Batching is only efficient when secondary initial epochs align.
+                    # Mismatched epochs trigger slower serial fallback.
                     for idx in indices:
                         try:
                             s_state, _, s_prop = secondaries[idx]
@@ -98,11 +101,13 @@ class ConjunctionAssessor:
                             sec_positions[idx] = (1e9, 1e9, 1e9)
 
             # Stage 1: Proximity Filtering
-            # Use KD-Tree for massive catalogs (optimal O(log N)),
-            # otherwise use vectorized O(N) which is faster for small fleets.
             if n_sec > 500:
-                index = KDTreeSpatialIndex(sec_positions)
-                close_indices = index.query_radius(
+                # Rebuild tree only every 5 minutes (300s)
+                if current_index is None or (epoch - last_tree_epoch).total_seconds() >= 300:
+                    current_index = KDTreeSpatialIndex(sec_positions)
+                    last_tree_epoch = epoch
+                
+                close_indices = current_index.query_radius(
                     p_state.r, radius_km=self.screening_distance
                 )
             else:
@@ -122,7 +127,7 @@ class ConjunctionAssessor:
         for sec_idx, (t_start, t_end) in candidate_pairs.items():
             s_state, s_cov, s_prop = secondaries[sec_idx]
 
-            # Widen the TCA search window by one step on each side for safety
+            # Stage 2: Golden-section refinement
             margin = timedelta(seconds=self.tca_time_step_s)
             tca_result = self.tca_finder.find_tca(
                 primary,

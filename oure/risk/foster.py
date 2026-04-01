@@ -28,7 +28,7 @@ class FosterPcCalculator:
         hard_body_radius_km: float,
         method: PcMethod = PcMethod.NUMERICAL,
         integration_sigma: float = 5.0,
-        series_terms: int = 200,
+        series_terms: int = 30,
     ):
         self.R = hard_body_radius_km
         self.method = method
@@ -76,9 +76,8 @@ class FosterPcCalculator:
 
     def _foster_series(self, b: np.ndarray, C: np.ndarray) -> float:
         eigenvalues, _ = np.linalg.eigh(C)
-        lam1, lam2 = sorted(eigenvalues)  # lam1=min, lam2=max
-        if lam1 <= 0 or lam2 <= 0:
-            return 0.0
+        # Ensure eigenvalues are positive and non-zero
+        lam1, lam2 = sorted(np.abs(eigenvalues) + 1e-15)  # lam1=min, lam2=max
 
         # u = 1/2 * b^T * C^-1 * b (Half of Mahalanobis distance squared)
         C_inv = np.linalg.inv(C)

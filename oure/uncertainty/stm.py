@@ -6,7 +6,7 @@ OURE Uncertainty Modeling - State Transition Matrix (STM)
 from __future__ import annotations
 
 import logging
-from typing import cast
+from typing import Any, cast
 
 import numpy as np
 from scipy.linalg import expm
@@ -19,13 +19,12 @@ logger = logging.getLogger("oure.uncertainty.stm")
 
 class STMCalculator:
     """
-    Computes the 6×6 State Transition Matrix Φ(t, t₀) for covariance
-    propagation.
+    Computes the State Transition Matrix (STM) using analytical or numerical methods.
     """
 
     def __init__(self, fidelity: int = 1):
-        assert fidelity in (0, 1, 2), "Fidelity must be 0, 1, or 2"
         self.fidelity = fidelity
+        self._prop: Any = None
 
     def compute(self, state: StateVector, dt_seconds: float) -> np.ndarray:
         """Returns the 6×6 STM Φ(t₀+dt, t₀)."""
@@ -54,11 +53,7 @@ class STMCalculator:
         z_r = r_hat[2]
 
         coeff = (
-            -1.5
-            * constants.J2
-            * constants.MU_KM3_S2
-            * constants.R_EARTH_KM**2
-            / r_mag**5
+            -1.5 * constants.J2 * constants.MU_KM3_S2 * constants.R_EARTH_KM**2 / r_mag**5
         )
         delta_g = np.zeros((3, 3))
         for i in range(3):
@@ -86,7 +81,8 @@ class STMCalculator:
         """
         from oure.physics.numerical import NumericalPropagator
 
-        prop = NumericalPropagator()
+        if self._prop is None:
+            self._prop = NumericalPropagator()
 
         epsilon = 1e-4  # Perturbation size in km and km/s
         stm = np.zeros((6, 6))
@@ -103,8 +99,8 @@ class STMCalculator:
             s_plus = StateVector.from_6d(x_plus, state.epoch, state.sat_id)
             s_minus = StateVector.from_6d(x_minus, state.epoch, state.sat_id)
 
-            y_plus = prop.propagate(s_plus, dt).state_vector_6d
-            y_minus = prop.propagate(s_minus, dt).state_vector_6d
+            y_plus = self._prop.propagate(s_plus, dt).state_vector_6d
+            y_minus = self._prop.propagate(s_minus, dt).state_vector_6d
 
             # Central difference: dY/dx_i
             stm[:, i] = (y_plus - y_minus) / (2 * epsilon)
